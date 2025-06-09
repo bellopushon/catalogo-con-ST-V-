@@ -29,30 +29,30 @@ import SubscriptionPage from './components/subscription/SubscriptionPage';
 // Public Components
 import PublicCatalog from './components/catalog/PublicCatalog';
 
-// Loading component
+// 🔥 IMPROVED: Simplified loading component
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
         <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-gray-600">Cargando...</p>
+        <p className="text-gray-600">Cargando aplicación...</p>
       </div>
     </div>
   );
 }
 
-// ProtectedRoute component
+// 🔥 IMPROVED: Simplified ProtectedRoute component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   
-  // Always show loading while not initialized
+  // Show loading while initializing
   if (!state.isInitialized) {
     return <LoadingScreen />;
   }
   
-  // If not authenticated, redirect to login
+  // Redirect to login if not authenticated
   if (!state.isAuthenticated) {
-    return <Navigate to="/login\" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   // User is authenticated, render content
@@ -64,7 +64,7 @@ function AppRoutes() {
   const { isDarkMode } = useTheme();
   const location = useLocation();
   
-  // Handle dark mode for admin routes only
+  // 🎨 Handle dark mode for admin routes only
   useEffect(() => {
     const isAdminRoute = location.pathname.startsWith('/admin') || 
                         location.pathname === '/profile' || 
@@ -95,7 +95,7 @@ function AppRoutes() {
     }
   }, [location.pathname, isDarkMode]);
   
-  // CRITICAL: Always show loading screen while initializing
+  // 🔥 CRITICAL: Show loading screen while initializing
   if (!state.isInitialized) {
     return <LoadingScreen />;
   }
@@ -107,7 +107,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <LoginPage />
           )
@@ -152,7 +152,7 @@ function AppRoutes() {
         path="/" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <Navigate to="/login" replace />
           )

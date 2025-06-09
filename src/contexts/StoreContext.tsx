@@ -98,7 +98,7 @@ const initialState: StoreState = {
   stores: [],
   currentStore: null,
   isAuthenticated: false,
-  isLoading: true, // Start with loading true
+  isLoading: true,
   isInitialized: false,
 };
 
@@ -880,38 +880,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // CRITICAL: Robust authentication initialization
+  // 🔥 CRITICAL: Robust authentication initialization
   useEffect(() => {
     let isMounted = true;
     
     const initializeAuth = async () => {
       try {
-        // Get current session
-        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('🔄 Starting authentication initialization...');
         
-        if (error) {
-          console.warn('Session error:', error);
+        // 🚀 IMPROVED: Use getSession for better persistence
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.warn('⚠️ Session error:', sessionError);
         }
         
         if (session?.user && isMounted) {
-          // User is authenticated
-          const { data: userData } = await supabase
+          console.log('✅ User session found:', session.user.id);
+          
+          // User is authenticated - get user data
+          const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
 
+          if (userError) {
+            console.warn('⚠️ Error fetching user data:', userError);
+          }
+
           const appUser = transformSupabaseUserToAppUser(session.user, userData);
           dispatch({ type: 'SET_USER', payload: appUser });
           dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
+          // Load user stores
           await loadUserStores(session.user.id);
+          console.log('✅ User data and stores loaded successfully');
         } else if (isMounted) {
-          // No user authenticated
+          console.log('ℹ️ No user session found');
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('❌ Auth initialization error:', error);
         if (isMounted) {
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
@@ -919,19 +929,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           dispatch({ type: 'SET_LOADING', payload: false });
           dispatch({ type: 'SET_INITIALIZED', payload: true });
+          console.log('🏁 Authentication initialization finished');
         }
       }
     };
 
     initializeAuth();
 
-    // Listen for auth changes
+    // 🔄 Listen for auth changes with improved handling
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
+      console.log('🔄 Auth state change:', event, session?.user?.id);
+      
       if (event === 'SIGNED_OUT' || !session) {
+        console.log('👋 User signed out');
         dispatch({ type: 'LOGOUT' });
       } else if (event === 'SIGNED_IN' && session?.user) {
+        console.log('👋 User signed in:', session.user.id);
+        
         const { data: userData } = await supabase
           .from('users')
           .select('*')
@@ -943,6 +959,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
         await loadUserStores(session.user.id);
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        console.log('🔄 Token refreshed for user:', session.user.id);
+        // Token refreshed - user is still authenticated
+        // No need to reload everything, just ensure state is correct
+        if (!state.isAuthenticated) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          const appUser = transformSupabaseUserToAppUser(session.user, userData);
+          dispatch({ type: 'SET_USER', payload: appUser });
+          dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+        }
       }
     });
 
