@@ -25,7 +25,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const [showStoreSelector, setShowStoreSelector] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { state, dispatch, logout } = useStore();
+  const { state, logout } = useStore();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { success, error } = useToast();
 
@@ -62,7 +62,6 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
       error('Error al cerrar sesión', err.message || 'No se pudo cerrar la sesión. Intenta de nuevo.');
       
       // Force logout anyway and redirect
-      dispatch({ type: 'LOGOUT' });
       window.location.href = '/login';
     } finally {
       setIsLoggingOut(false);

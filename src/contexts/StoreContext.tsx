@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, Dispatch, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
-
 
 // Definición de tipos
 export interface User {
@@ -440,9 +438,7 @@ function transformAppStoreToSupabaseUpdate(storeData: Partial<Store>) {
 
 // Proveedor de contexto
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const navigate = useNavigate(); // Aquí es donde importas y usas useNavigate
   const [state, dispatch] = useReducer(storeReducer, initialState);
-
 
   // Función para obtener límites por plan
   const getMaxStores = (): number => {
@@ -928,43 +924,89 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
- useEffect(() => {
-  let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
 
-  const initializeAuth = async () => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 Initializing authentication...');
+        
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+          if (isMounted) {
+            dispatch({ type: 'SET_AUTH_ERROR', payload: sessionError.message });
+            dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+            dispatch({ type: 'SET_INITIALIZED', payload: true });
+          }
+          return;
+        }
 
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError);
-        throw sessionError;
+        if (session?.user && isMounted) {
+          console.log('✅ User found in session:', session.user.id);
+          
+          // Get user data from database
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          const appUser = transformSupabaseUserToAppUser(session.user, userData);
+          dispatch({ type: 'SET_USER', payload: appUser });
+          dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+
+          // Load user stores
+          await loadUserStores(session.user.id);
+        } else if (isMounted) {
+          console.log('ℹ️ No user session found');
+          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+        }
+      } catch (error: any) {
+        console.error('❌ Auth initialization failed:', error);
+        if (isMounted) {
+          dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
+          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+        }
+      } finally {
+        if (isMounted) {
+          dispatch({ type: 'SET_INITIALIZED', payload: true });
+          console.log('✅ Authentication initialization complete');
+        }
       }
+    };
 
-      if (session?.user && isMounted) {
-        console.log('✅ User found in session:', session.user.id);
-        dispatch({ type: 'SET_USER', payload: session.user });
+    initializeAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
+      console.log('🔄 Auth state changed:', event);
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        dispatch({ type: 'LOGOUT' });
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        const appUser = transformSupabaseUserToAppUser(session.user, userData);
+        dispatch({ type: 'SET_USER', payload: appUser });
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-        navigate('/admin', { replace: true }); // Redirige a /admin
-      } else if (isMounted) {
-        dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+
+        await loadUserStores(session.user.id);
       }
-    } catch (error) {
-      console.error('❌ Auth initialization failed:', error);
-      dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
+    });
 
-  initializeAuth();
-
-  return () => {
-    isMounted = false; // Cancelamos cualquier actualización de estado si el componente se desmonta
-  };
-}, [dispatch, navigate]); // Asegúrate de que navigate esté incluido en las dependencias
-
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // 🔥 CRITICAL: Empty dependency array to prevent infinite loops
 
   return (
     <StoreContext.Provider value={{ 
