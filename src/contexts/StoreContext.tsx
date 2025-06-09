@@ -90,6 +90,7 @@ export interface StoreState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
+  authError: string | null;
 }
 
 // Definición del estado inicial
@@ -98,8 +99,9 @@ const initialState: StoreState = {
   stores: [],
   currentStore: null,
   isAuthenticated: false,
-  isLoading: true,
+  isLoading: false,
   isInitialized: false,
+  authError: null,
 };
 
 // Tipos de acciones
@@ -119,6 +121,7 @@ type ActionType =
   | { type: 'SET_AUTHENTICATED'; payload: boolean }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_INITIALIZED'; payload: boolean }
+  | { type: 'SET_AUTH_ERROR'; payload: string | null }
   | { type: 'LOGOUT' };
 
 // Reducer
@@ -254,6 +257,8 @@ function storeReducer(state: StoreState, action: ActionType): StoreState {
       return { ...state, isLoading: action.payload };
     case 'SET_INITIALIZED':
       return { ...state, isInitialized: action.payload };
+    case 'SET_AUTH_ERROR':
+      return { ...state, authError: action.payload };
     case 'LOGOUT':
       return {
         ...initialState,
@@ -271,6 +276,7 @@ const StoreContext = createContext<{
   dispatch: Dispatch<ActionType>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
   createStore: (storeData: Omit<Store, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'categories' | 'products'>) => Promise<Store>;
   updateStore: (storeData: Partial<Store>) => Promise<void>;
   createCategory: (categoryData: Omit<Category, 'id' | 'storeId' | 'createdAt'>) => Promise<Category>;
@@ -288,6 +294,7 @@ const StoreContext = createContext<{
   dispatch: () => null,
   login: async () => {},
   register: async () => {},
+  logout: async () => {},
   createStore: async () => ({} as Store),
   updateStore: async () => {},
   createCategory: async () => ({} as Category),
@@ -469,6 +476,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const maxStores = getMaxStores();
     const currentStoreCount = state.stores.length;
     return currentStoreCount < maxStores;
+  };
+
+  // Función para cerrar sesión
+  const logout = async (): Promise<void> => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      
+      // Cerrar sesión en Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+        throw error;
+      }
+      
+      // Limpiar estado local
+      dispatch({ type: 'LOGOUT' });
+      
+      console.log('✅ Logout successful');
+    } catch (error) {
+      console.error('❌ Logout failed:', error);
+      // Forzar logout local incluso si falla el logout remoto
+      dispatch({ type: 'LOGOUT' });
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   };
 
   // Función para crear tienda
@@ -762,6 +795,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: 'SET_AUTH_ERROR', payload: null });
+      
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       
@@ -777,8 +812,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       // Cargar tiendas del usuario
       await loadUserStores(data.user.id);
-    } catch (error) {
-      console.error('Login error:', error);
+      
+      console.log('✅ Login successful');
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -789,6 +827,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const register = async (email: string, password: string, name: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: 'SET_AUTH_ERROR', payload: null });
+      
       const { data, error } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -812,9 +852,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         // Cargar tiendas del usuario (debería estar vacío para nuevos usuarios)
         await loadUserStores(data.user.id);
+        
+        console.log('✅ Registration successful');
       }
-    } catch (error) {
-      console.error('Registration error:', error);
+    } catch (error: any) {
+      console.error('❌ Registration error:', error);
+      dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -880,26 +923,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 OPTIMIZED: Simplified authentication initialization
+  // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
   useEffect(() => {
     let isMounted = true;
-    let isInitializing = false;
+    let authSubscription: any = null;
 
     const initializeAuth = async () => {
-      if (isInitializing) return;
-      isInitializing = true;
-
       try {
-        // Get current session immediately
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔄 Initializing authentication...');
+        dispatch({ type: 'SET_LOADING', payload: true });
+
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+          throw sessionError;
+        }
+
         if (session?.user && isMounted) {
-          // User is authenticated
-          const { data: userData } = await supabase
+          console.log('✅ Found existing session for user:', session.user.id);
+          
+          // Load user data
+          const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
+
+          if (userError) {
+            console.error('❌ User data error:', userError);
+            throw userError;
+          }
 
           const appUser = transformSupabaseUserToAppUser(session.user, userData);
           dispatch({ type: 'SET_USER', payload: appUser });
@@ -907,51 +962,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           // Load user stores
           await loadUserStores(session.user.id);
-        } else if (isMounted) {
-          // No user authenticated
+          
+          console.log('✅ Authentication initialization complete');
+        } else {
+          console.log('ℹ️ No active session found');
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (isMounted) {
-          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
-        }
+      } catch (error: any) {
+        console.error('❌ Auth initialization failed:', error);
+        dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
+        dispatch({ type: 'SET_AUTHENTICATED', payload: false });
       } finally {
         if (isMounted) {
           dispatch({ type: 'SET_LOADING', payload: false });
           dispatch({ type: 'SET_INITIALIZED', payload: true });
         }
-        isInitializing = false;
       }
     };
 
-    // Initialize immediately
+    // Set up auth state listener
+    const setupAuthListener = () => {
+      authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!isMounted) return;
+        
+        console.log('🔄 Auth state change:', event, session?.user?.id);
+
+        try {
+          if (event === 'SIGNED_OUT' || !session) {
+            console.log('👋 User signed out');
+            dispatch({ type: 'LOGOUT' });
+          } else if (event === 'SIGNED_IN' && session?.user) {
+            console.log('👋 User signed in:', session.user.id);
+            
+            const { data: userData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            const appUser = transformSupabaseUserToAppUser(session.user, userData);
+            dispatch({ type: 'SET_USER', payload: appUser });
+            dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+
+            await loadUserStores(session.user.id);
+          }
+        } catch (error) {
+          console.error('❌ Auth state change error:', error);
+        }
+      });
+    };
+
+    // Initialize
     initializeAuth();
+    setupAuthListener();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      
-      if (event === 'SIGNED_OUT' || !session) {
-        dispatch({ type: 'LOGOUT' });
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        const appUser = transformSupabaseUserToAppUser(session.user, userData);
-        dispatch({ type: 'SET_USER', payload: appUser });
-        dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-
-        await loadUserStores(session.user.id);
-      }
-    });
-
+    // Cleanup
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
+      if (authSubscription) {
+        authSubscription.data?.subscription?.unsubscribe();
+      }
     };
   }, []);
 
@@ -961,6 +1031,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dispatch, 
       login, 
       register, 
+      logout,
       createStore,
       updateStore,
       createCategory,

@@ -41,7 +41,7 @@ function LoadingScreen() {
   );
 }
 
-// 🔥 SIMPLIFIED: ProtectedRoute component
+// 🔥 CRITICAL FIX: ProtectedRoute component with better error handling
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   
@@ -50,9 +50,30 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <LoadingScreen />;
   }
   
+  // Show error if there's an auth error
+  if (state.authError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Error de Autenticación</h2>
+          <p className="text-gray-600 mb-4">{state.authError}</p>
+          <button
+            onClick={() => window.location.href = '/login'}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg"
+          >
+            Ir al Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   // Redirect to login if not authenticated
   if (!state.isAuthenticated) {
-    return <Navigate to="/login\" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   // User is authenticated, render content
@@ -95,27 +116,25 @@ function AppRoutes() {
     }
   }, [location.pathname, isDarkMode]);
   
-  // 🔥 CRITICAL: Show loading screen while initializing
-  if (!state.isInitialized) {
-    return <LoadingScreen />;
-  }
-  
   return (
     <Routes> 
-      {/* Public Routes */}
+      {/* 🌍 PUBLIC ROUTES - NO AUTHENTICATION REQUIRED */}
+      <Route path="/store/:slug" element={<PublicCatalog />} />
+      
+      {/* 🔐 AUTH ROUTES */}
       <Route 
         path="/login" 
         element={
-          state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+          // If already authenticated, redirect to admin
+          state.isInitialized && state.isAuthenticated ? (
+            <Navigate to="/admin" replace />
           ) : (
             <LoginPage />
           )
         } 
       />
-      <Route path="/store/:slug" element={<PublicCatalog />} />
       
-      {/* Protected Admin Routes */}
+      {/* 🛡️ PROTECTED ADMIN ROUTES */}
       <Route path="/admin" element={
         <ProtectedRoute>
           <AdminLayout />
@@ -131,7 +150,7 @@ function AppRoutes() {
         <Route path="stores" element={<StoreManager />} />
       </Route>
       
-      {/* Protected Profile Route */}
+      {/* 🛡️ PROTECTED PROFILE ROUTE */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <AdminLayout>
@@ -140,26 +159,35 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
-      {/* Protected Subscription Route */}
+      {/* 🛡️ PROTECTED SUBSCRIPTION ROUTE */}
       <Route path="/subscription" element={
         <ProtectedRoute>
           <SubscriptionPage />
         </ProtectedRoute>
       } />
       
-      {/* Default redirects */}
+      {/* 🏠 DEFAULT REDIRECTS */}
       <Route 
         path="/" 
         element={
-          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+          // Only redirect if initialized
+          state.isInitialized ? (
+            <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+          ) : (
+            <LoadingScreen />
+          )
         } 
       />
       
-      {/* Catch all route */}
+      {/* 🚫 CATCH ALL ROUTE */}
       <Route 
         path="*" 
         element={
-          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+          state.isInitialized ? (
+            <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+          ) : (
+            <LoadingScreen />
+          )
         } 
       />
     </Routes>

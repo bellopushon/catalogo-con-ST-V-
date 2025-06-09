@@ -1,18 +1,124 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ShoppingCart, Share2, Phone, Facebook, Instagram, Twitter, MessageCircle, Search, Filter } from 'lucide-react';
-import { useStore } from '../../contexts/StoreContext';
 import { useAnalytics } from '../../contexts/AnalyticsContext';
 import { useTheme, COLOR_PALETTES } from '../../contexts/ThemeContext';
 import { formatCurrency } from '../../utils/constants';
+import { supabase } from '../../lib/supabase';
 import ProductModal from './ProductModal';
 import CartModal from './CartModal';
 
+// 🔥 CRITICAL: Independent store loading for public catalog
+async function loadPublicStore(slug: string) {
+  try {
+    console.log('🔍 Loading public store:', slug);
+    
+    // Load store by slug
+    const { data: storeData, error: storeError } = await supabase
+      .from('stores')
+      .select('*')
+      .eq('slug', slug)
+      .single();
+
+    if (storeError || !storeData) {
+      console.error('❌ Store not found:', storeError);
+      return null;
+    }
+
+    // Load categories for this store
+    const { data: categoriesData } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('store_id', storeData.id)
+      .order('created_at', { ascending: true });
+
+    // Load active products for this store
+    const { data: productsData } = await supabase
+      .from('products')
+      .select('*')
+      .eq('store_id', storeData.id)
+      .eq('is_active', true) // Only load active products for public catalog
+      .order('created_at', { ascending: true });
+
+    // Transform data
+    const categories = (categoriesData || []).map(cat => ({
+      id: cat.id,
+      storeId: cat.store_id,
+      name: cat.name,
+      createdAt: cat.created_at,
+    }));
+
+    const products = (productsData || []).map(prod => ({
+      id: prod.id,
+      storeId: prod.store_id,
+      categoryId: prod.category_id || undefined,
+      name: prod.name,
+      shortDescription: prod.short_description || undefined,
+      longDescription: prod.long_description || undefined,
+      price: parseFloat(prod.price),
+      mainImage: prod.main_image || undefined,
+      gallery: prod.gallery || [],
+      isActive: prod.is_active ?? true,
+      isFeatured: prod.is_featured ?? false,
+      createdAt: prod.created_at,
+      updatedAt: prod.updated_at,
+    }));
+
+    const store = {
+      id: storeData.id,
+      userId: storeData.user_id,
+      name: storeData.name,
+      slug: storeData.slug,
+      description: storeData.description || undefined,
+      logo: storeData.logo || undefined,
+      whatsapp: storeData.whatsapp || undefined,
+      currency: storeData.currency || 'USD',
+      headingFont: storeData.heading_font || 'Inter',
+      bodyFont: storeData.body_font || 'Inter',
+      colorPalette: storeData.color_palette || 'predeterminado',
+      borderRadius: storeData.border_radius || 8,
+      productsPerPage: storeData.products_per_page || 12,
+      facebookUrl: storeData.facebook_url || undefined,
+      instagramUrl: storeData.instagram_url || undefined,
+      tiktokUrl: storeData.tiktok_url || undefined,
+      twitterUrl: storeData.twitter_url || undefined,
+      showSocialInCatalog: storeData.show_social_in_catalog ?? true,
+      acceptCash: storeData.accept_cash ?? true,
+      acceptBankTransfer: storeData.accept_bank_transfer ?? false,
+      bankDetails: storeData.bank_details || undefined,
+      allowPickup: storeData.allow_pickup ?? true,
+      allowDelivery: storeData.allow_delivery ?? false,
+      deliveryCost: storeData.delivery_cost || 0,
+      deliveryZone: storeData.delivery_zone || undefined,
+      messageGreeting: storeData.message_greeting || '¡Hola {storeName}!',
+      messageIntroduction: storeData.message_introduction || 'Soy {customerName}.\nMe gustaría hacer el siguiente pedido:',
+      messageClosing: storeData.message_closing || '¡Muchas gracias!',
+      includePhoneInMessage: storeData.include_phone_in_message ?? true,
+      includeCommentsInMessage: storeData.include_comments_in_message ?? true,
+      createdAt: storeData.created_at,
+      updatedAt: storeData.updated_at,
+      categories,
+      products,
+    };
+
+    console.log('✅ Store loaded successfully:', store.name);
+    return store;
+  } catch (error) {
+    console.error('❌ Error loading public store:', error);
+    return null;
+  }
+}
+
 export default function PublicCatalog() {
   const { slug } = useParams();
-  const { state } = useStore();
   const { trackVisit } = useAnalytics();
   const { applyTheme } = useTheme();
+  
+  // 🔥 CRITICAL: Independent state for public catalog
+  const [store, setStore] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cart, setCart] = useState([]);
@@ -21,41 +127,65 @@ export default function PublicCatalog() {
   const [showSearch, setShowSearch] = useState(false);
   const [hasTrackedVisit, setHasTrackedVisit] = useState(false);
 
-  // Find store by slug
-  const store = state.stores.find(s => s.slug === slug);
-
+  // 🔥 CRITICAL: Load store independently from authentication context
   useEffect(() => {
-    if (store && !hasTrackedVisit) {
-      // Track visit only once per component mount
-      trackVisit(store.id);
-      setHasTrackedVisit(true);
+    if (!slug) return;
 
-      // Apply store theme to the public catalog
-      const paletteId = store.colorPalette || 'predeterminado';
-      const borderRadius = store.borderRadius || 8;
-      
-      // Find the palette data
-      const palette = COLOR_PALETTES.find(p => p.id === paletteId) || COLOR_PALETTES[0];
-      
-      console.log('🎨 Applying catalog theme:', { paletteId, palette, borderRadius });
-      
-      // Apply CSS variables for the theme - CRITICAL FIX
-      const root = document.documentElement;
-      root.style.setProperty('--catalog-primary', palette.primary);
-      root.style.setProperty('--catalog-secondary', palette.secondary);
-      root.style.setProperty('--catalog-border-radius', `${borderRadius}px`);
-      
-      // Also apply the standard variables for compatibility
-      root.style.setProperty('--color-primary', palette.primary);
-      root.style.setProperty('--color-secondary', palette.secondary);
-      root.style.setProperty('--border-radius', `${borderRadius}px`);
-      
-      // Apply theme using the theme context
-      applyTheme(paletteId, borderRadius);
-      
-      // Set page title
-      document.title = `${store.name} - Catálogo`;
-    }
+    const loadStore = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const storeData = await loadPublicStore(slug);
+        
+        if (!storeData) {
+          setError('Tienda no encontrada');
+          return;
+        }
+        
+        setStore(storeData);
+        
+        // Track visit only once per component mount
+        if (!hasTrackedVisit) {
+          trackVisit(storeData.id);
+          setHasTrackedVisit(true);
+        }
+
+        // Apply store theme to the public catalog
+        const paletteId = storeData.colorPalette || 'predeterminado';
+        const borderRadius = storeData.borderRadius || 8;
+        
+        // Find the palette data
+        const palette = COLOR_PALETTES.find(p => p.id === paletteId) || COLOR_PALETTES[0];
+        
+        console.log('🎨 Applying catalog theme:', { paletteId, palette, borderRadius });
+        
+        // Apply CSS variables for the theme - CRITICAL FIX
+        const root = document.documentElement;
+        root.style.setProperty('--catalog-primary', palette.primary);
+        root.style.setProperty('--catalog-secondary', palette.secondary);
+        root.style.setProperty('--catalog-border-radius', `${borderRadius}px`);
+        
+        // Also apply the standard variables for compatibility
+        root.style.setProperty('--color-primary', palette.primary);
+        root.style.setProperty('--color-secondary', palette.secondary);
+        root.style.setProperty('--border-radius', `${borderRadius}px`);
+        
+        // Apply theme using the theme context
+        applyTheme(paletteId, borderRadius);
+        
+        // Set page title
+        document.title = `${storeData.name} - Catálogo`;
+        
+      } catch (err) {
+        console.error('❌ Error loading store:', err);
+        setError('Error al cargar la tienda');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadStore();
 
     // Cleanup function to reset theme when component unmounts
     return () => {
@@ -68,9 +198,22 @@ export default function PublicCatalog() {
       root.style.setProperty('--color-secondary', '#ec4899');
       root.style.setProperty('--border-radius', '8px');
     };
-  }, [store, applyTheme, trackVisit, hasTrackedVisit]);
+  }, [slug, applyTheme, trackVisit, hasTrackedVisit]);
 
-  if (!store) {
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando catálogo...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !store) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -78,14 +221,14 @@ export default function PublicCatalog() {
             <ShoppingCart className="w-8 h-8 text-gray-400" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Tienda no encontrada</h1>
-          <p className="text-gray-600">La tienda que buscas no existe o ha sido eliminada.</p>
+          <p className="text-gray-600">{error || 'La tienda que buscas no existe o ha sido eliminada.'}</p>
         </div>
       </div>
     );
   }
 
-  const activeProducts = store.products.filter(p => p.isActive);
-  const categories = store.categories;
+  const activeProducts = store.products || [];
+  const categories = store.categories || [];
 
   const filteredProducts = activeProducts.filter(product => {
     const matchesCategory = !selectedCategory || product.categoryId === selectedCategory;

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { useToast } from '../../contexts/ToastContext';
 import StoreSelector from './StoreSelector';
 
 interface UserDropdownProps {
@@ -23,9 +23,11 @@ interface UserDropdownProps {
 export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showStoreSelector, setShowStoreSelector] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { state, dispatch } = useStore();
+  const { state, dispatch, logout } = useStore();
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { success, error } = useToast();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -40,13 +42,30 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   }, []);
 
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    
     try {
-      await supabase.auth.signOut();
-      dispatch({ type: 'LOGOUT' });
+      setIsLoggingOut(true);
       setIsOpen(false);
+      
+      console.log('🔄 Starting logout process...');
+      
+      await logout();
+      
+      success('Sesión cerrada', 'Has cerrado sesión correctamente');
+      
+      // Force redirect to login
       window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout error:', error);
+      
+    } catch (err: any) {
+      console.error('❌ Logout error:', err);
+      error('Error al cerrar sesión', err.message || 'No se pudo cerrar la sesión. Intenta de nuevo.');
+      
+      // Force logout anyway and redirect
+      dispatch({ type: 'LOGOUT' });
+      window.location.href = '/login';
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -68,6 +87,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors admin-dark:hover:bg-gray-700"
+        disabled={isLoggingOut}
       >
         {/* Avatar */}
         <div className="relative">
@@ -97,11 +117,11 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
           </p>
         </div>
 
-        <ChevronDown className={`w-4 h-4 text-gray-500 admin-dark:text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-500 admin-dark:text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''} ${isLoggingOut ? 'opacity-50' : ''}`} />
       </button>
 
       {/* Dropdown Menu - FIXED DARK MODE */}
-      {isOpen && (
+      {isOpen && !isLoggingOut && (
         <div className="absolute right-0 top-full mt-2 w-80 bg-white admin-dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 admin-dark:border-gray-700 py-2 z-50">
           {/* User Info Header - FIXED DARK MODE */}
           <div className="px-4 py-3 border-b border-gray-100 admin-dark:border-gray-700">
@@ -223,10 +243,20 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
                 <div className="border-t border-gray-100 admin-dark:border-gray-700 mt-2 pt-2">
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 transition-colors"
+                    disabled={isLoggingOut}
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Cerrar Sesión
+                    {isLoggingOut ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                        Cerrando sesión...
+                      </>
+                    ) : (
+                      <>
+                        <LogOut className="w-4 h-4" />
+                        Cerrar Sesión
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
