@@ -98,7 +98,7 @@ const initialState: StoreState = {
   stores: [],
   currentStore: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true, // Start with loading true
   isInitialized: false,
 };
 
@@ -257,7 +257,8 @@ function storeReducer(state: StoreState, action: ActionType): StoreState {
     case 'LOGOUT':
       return {
         ...initialState,
-        isInitialized: true
+        isInitialized: true,
+        isLoading: false
       };
     default:
       return state;
@@ -879,14 +880,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Inicialización de autenticación simplificada
+  // CRITICAL: Robust authentication initialization
   useEffect(() => {
     let isMounted = true;
     
     const initializeAuth = async () => {
       try {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        
+        // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -894,6 +894,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         
         if (session?.user && isMounted) {
+          // User is authenticated
           const { data: userData } = await supabase
             .from('users')
             .select('*')
@@ -906,6 +907,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           await loadUserStores(session.user.id);
         } else if (isMounted) {
+          // No user authenticated
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
       } catch (error) {
@@ -923,7 +925,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    // Escuchar cambios de autenticación
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       

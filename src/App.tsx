@@ -41,18 +41,21 @@ function LoadingScreen() {
   );
 }
 
-// ProtectedRoute simplificado
+// ProtectedRoute component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   
+  // Always show loading while not initialized
   if (!state.isInitialized) {
     return <LoadingScreen />;
   }
   
+  // If not authenticated, redirect to login
   if (!state.isAuthenticated) {
-    return <Navigate to="/login\" replace />;
+    return <Navigate to="/login" replace />;
   }
   
+  // User is authenticated, render content
   return <>{children}</>;
 }
 
@@ -92,7 +95,7 @@ function AppRoutes() {
     }
   }, [location.pathname, isDarkMode]);
   
-  // Show loading screen while initializing
+  // CRITICAL: Always show loading screen while initializing
   if (!state.isInitialized) {
     return <LoadingScreen />;
   }
@@ -104,7 +107,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <LoginPage />
           )
@@ -149,7 +152,7 @@ function AppRoutes() {
         path="/" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <Navigate to="/login" replace />
           )
