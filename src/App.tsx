@@ -52,7 +52,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   // If not authenticated, redirect to login
   if (!state.isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login\" replace />;
   }
   
   // User is authenticated, render content
@@ -107,7 +107,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <LoginPage />
           )
@@ -152,7 +152,7 @@ function AppRoutes() {
         path="/" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <Navigate to="/login" replace />
           )
