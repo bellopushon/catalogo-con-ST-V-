@@ -154,20 +154,20 @@ function AppRoutes() {
 
 function App() {
   return (
-    <StoreProvider>
-      <AnalyticsProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <Router>
+    <Router>
+      <StoreProvider>
+        <AnalyticsProvider>
+          <ThemeProvider>
+            <ToastProvider>
               <div className="min-h-screen bg-gray-50">
                 <AppRoutes />
                 <ToastContainer />
               </div>
-            </Router>
-          </ToastProvider>
-        </ThemeProvider>
-      </AnalyticsProvider>
-    </StoreProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </AnalyticsProvider>
+      </StoreProvider>
+    </Router>
   );
 }
 
