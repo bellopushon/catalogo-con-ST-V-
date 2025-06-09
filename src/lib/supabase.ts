@@ -19,5 +19,3 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce'
   }
 });
-
-// ... rest of the file remains unchanged

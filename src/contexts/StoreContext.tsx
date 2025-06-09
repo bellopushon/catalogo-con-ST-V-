@@ -880,9 +880,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 CRITICAL: Robust authentication initialization
+  // 🔥 CRITICAL: Robust authentication initialization with timeout
   useEffect(() => {
     let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
     
     const initializeAuth = async () => {
       try {
@@ -934,6 +935,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // 🔥 CRITICAL: Add timeout to prevent infinite loading
+    timeoutId = setTimeout(() => {
+      if (isMounted && !state.isInitialized) {
+        console.warn('⚠️ Auth initialization timeout - forcing completion');
+        dispatch({ type: 'SET_LOADING', payload: false });
+        dispatch({ type: 'SET_INITIALIZED', payload: true });
+        dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+      }
+    }, 10000); // 10 second timeout
+
     initializeAuth();
 
     // 🔄 Listen for auth changes with improved handling
@@ -979,6 +990,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
