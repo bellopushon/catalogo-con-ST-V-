@@ -117,7 +117,7 @@ function AppRoutes() {
       {/* 🔐 LOGIN ROUTE */}
       <Route path="/login" element={
         state.isAuthenticated ? (
-          <Navigate to="/admin" replace />
+          <Navigate to="/admin\" replace />
         ) : (
           <LoginPage />
         )
