@@ -31,6 +31,9 @@ export default defineConfig(({ mode }) => {
           drop_console: true,
           drop_debugger: true,
         },
+        mangle: {
+          safari10: true,
+        },
       },
     },
     server: {
