@@ -928,9 +928,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
- // En StoreContext.tsx
-
-useEffect(() => {
+ useEffect(() => {
   let isMounted = true;
 
   const initializeAuth = async () => {
@@ -966,6 +964,7 @@ useEffect(() => {
     isMounted = false; // Cancelamos cualquier actualización de estado si el componente se desmonta
   };
 }, [dispatch, navigate]); // Asegúrate de que navigate esté incluido en las dependencias
+
 
   return (
     <StoreContext.Provider value={{ 
