@@ -924,9 +924,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
-  // En tu StoreContext.tsx, reemplaza SOLO el useEffect de inicialización con este código:
-
-  // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
   useEffect(() => {
     let isMounted = true;
 
@@ -1046,6 +1043,108 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []); // Empty dependency array
+
+  // 🚀 NUEVO: Listener para cambios de plan desde superadministrador
+  useEffect(() => {
+    if (state.user?.id && state.isInitialized) {
+      console.log('🔄 Setting up real-time plan change listener for user:', state.user.id);
+      
+      const channel = supabase
+        .channel('user-plan-changes')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+          filter: `id=eq.${state.user.id}`
+        }, async (payload) => {
+          console.log('🔄 Plan actualizado desde super admin:', payload);
+          
+          const newUserData = payload.new;
+          const oldUserData = payload.old;
+          
+          // Verificar si el plan cambió
+          if (newUserData.plan !== oldUserData.plan) {
+            console.log(`📈 Plan changed from ${oldUserData.plan} to ${newUserData.plan}`);
+            
+            // Actualizar usuario en el estado
+            const updatedUser = transformSupabaseUserToAppUser(
+              { id: state.user.id, email: state.user.email }, 
+              newUserData
+            );
+            
+            dispatch({ type: 'SET_USER', payload: updatedUser });
+            
+            // Recargar tiendas para aplicar nuevos límites
+            try {
+              await loadUserStores(state.user.id);
+              console.log('✅ Stores reloaded with new plan limits');
+            } catch (error) {
+              console.error('❌ Error reloading stores:', error);
+            }
+            
+            // Mostrar notificación al usuario (si tienes un sistema de toast)
+            const planNames = {
+              gratuito: 'Gratis',
+              emprendedor: 'Emprendedor', 
+              profesional: 'Profesional'
+            };
+            
+            // Crear notificación personalizada si no hay sistema de toast
+            const notification = document.createElement('div');
+            notification.innerHTML = `
+              <div style="
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #10B981;
+                color: white;
+                padding: 16px 24px;
+                border-radius: 8px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+                z-index: 9999;
+                font-family: system-ui, -apple-system, sans-serif;
+                font-weight: 500;
+                max-width: 400px;
+              ">
+                🎉 ¡Plan Actualizado!<br>
+                <span style="font-weight: 400; opacity: 0.9;">
+                  Tu plan ha sido actualizado a ${planNames[newUserData.plan] || newUserData.plan}
+                </span>
+              </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Remover notificación después de 5 segundos
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+              }
+            }, 5000);
+          }
+          
+          // Verificar si el estado de suscripción cambió
+          if (newUserData.subscription_status !== oldUserData.subscription_status) {
+            console.log(`📊 Subscription status changed from ${oldUserData.subscription_status} to ${newUserData.subscription_status}`);
+            
+            const updatedUser = transformSupabaseUserToAppUser(
+              { id: state.user.id, email: state.user.email }, 
+              newUserData
+            );
+            
+            dispatch({ type: 'SET_USER', payload: updatedUser });
+          }
+        })
+        .subscribe((status) => {
+          console.log('📡 Real-time subscription status:', status);
+        });
+
+      return () => {
+        console.log('🔌 Cleaning up real-time plan change listener');
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [state.user?.id, state.isInitialized]);
   
   return (
     <StoreContext.Provider value={{ 
