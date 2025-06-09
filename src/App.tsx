@@ -6,10 +6,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import ToastContainer from './components/ui/ToastContainer';
 
-// Auth Components
 import LoginPage from './components/auth/LoginPage';
-
-// Admin Components
 import AdminLayout from './components/layout/AdminLayout';
 import Dashboard from './components/dashboard/Dashboard';
 import ProductList from './components/products/ProductList';
@@ -19,17 +16,10 @@ import ThemeCustomizer from './components/design/ThemeCustomizer';
 import PaymentsShipping from './components/payments/PaymentsShipping';
 import AddStore from './components/premium/AddStore';
 import StoreManager from './components/stores/StoreManager';
-
-// Profile Components
 import ProfilePage from './components/profile/ProfilePage';
-
-// Subscription Components
 import SubscriptionPage from './components/subscription/SubscriptionPage';
-
-// Public Components
 import PublicCatalog from './components/catalog/PublicCatalog';
 
-// 🔥 SIMPLIFIED: Loading component
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -41,16 +31,15 @@ function LoadingScreen() {
   );
 }
 
-// 🔥 CRITICAL FIX: ProtectedRoute component with better error handling
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
-  
-  // Show loading while initializing
+
+  // Mostrar cargando mientras se inicializa
   if (!state.isInitialized) {
     return <LoadingScreen />;
   }
-  
-  // Show error if there's an auth error
+
+  // Mostrar error si hay un error de autenticación
   if (state.authError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -70,13 +59,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
-  // Redirect to login if not authenticated
+
+  // Si el usuario no está autenticado, redirigir al login
   if (!state.isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  
-  // User is authenticated, render content
+
   return <>{children}</>;
 }
 
@@ -84,12 +72,12 @@ function AppRoutes() {
   const { state } = useStore();
   const { isDarkMode } = useTheme();
   const location = useLocation();
-  
-  // 🎨 Handle dark mode for admin routes only
+
+  // Handle dark mode for admin routes only
   useEffect(() => {
     const isAdminRoute = location.pathname.startsWith('/admin') || 
-                        location.pathname === '/profile' || 
-                        location.pathname === '/subscription';
+                          location.pathname === '/profile' || 
+                          location.pathname === '/subscription';
     
     const isPublicRoute = location.pathname.startsWith('/store/') || 
                          location.pathname === '/login';
@@ -118,23 +106,14 @@ function AppRoutes() {
   
   return (
     <Routes> 
-      {/* 🌍 PUBLIC ROUTES - NO AUTHENTICATION REQUIRED */}
       <Route path="/store/:slug" element={<PublicCatalog />} />
-      
-      {/* 🔐 AUTH ROUTES */}
-      <Route 
-        path="/login" 
-        element={
-          // If already authenticated, redirect to admin
-          state.isInitialized && state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
-          ) : (
-            <LoginPage />
-          )
-        } 
-      />
-      
-      {/* 🛡️ PROTECTED ADMIN ROUTES */}
+      <Route path="/login" element={
+        state.isInitialized && state.isAuthenticated ? (
+          <Navigate to="/admin" replace />
+        ) : (
+          <LoginPage />
+        )
+      } />
       <Route path="/admin" element={
         <ProtectedRoute>
           <AdminLayout />
@@ -149,8 +128,6 @@ function AppRoutes() {
         <Route path="add-store" element={<AddStore />} />
         <Route path="stores" element={<StoreManager />} />
       </Route>
-      
-      {/* 🛡️ PROTECTED PROFILE ROUTE */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <AdminLayout>
@@ -158,38 +135,25 @@ function AppRoutes() {
           </AdminLayout>
         </ProtectedRoute>
       } />
-      
-      {/* 🛡️ PROTECTED SUBSCRIPTION ROUTE */}
       <Route path="/subscription" element={
         <ProtectedRoute>
           <SubscriptionPage />
         </ProtectedRoute>
       } />
-      
-      {/* 🏠 DEFAULT REDIRECTS */}
-      <Route 
-        path="/" 
-        element={
-          // Only redirect if initialized
-          state.isInitialized ? (
-            <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
-          ) : (
-            <LoadingScreen />
-          )
-        } 
-      />
-      
-      {/* 🚫 CATCH ALL ROUTE */}
-      <Route 
-        path="*" 
-        element={
-          state.isInitialized ? (
-            <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
-          ) : (
-            <LoadingScreen />
-          )
-        } 
-      />
+      <Route path="/" element={
+        state.isInitialized ? (
+          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+        ) : (
+          <LoadingScreen />
+        )
+      } />
+      <Route path="*" element={
+        state.isInitialized ? (
+          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+        ) : (
+          <LoadingScreen />
+        )
+      } />
     </Routes>
   );
 }
