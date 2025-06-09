@@ -16,18 +16,17 @@ export default function LoginPage() {
   const { dispatch } = useStore();
 
   // Redirect if already authenticated
-useEffect(() => {
-  // Revisar si ya existe una sesión en el localStorage
-  const savedSession = localStorage.getItem('supabase_session');
-  if (savedSession) {
-    const session = JSON.parse(savedSession);
-    dispatch({ type: 'SET_USER', payload: session.user });
-    dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-    navigate('/admin', { replace: true }); // Redirigir si ya está autenticado
-  }
-}, [dispatch, navigate]);
+  useEffect(() => {
+    const savedSession = localStorage.getItem('supabase_session');
+    if (savedSession) {
+      const session = JSON.parse(savedSession);
+      dispatch({ type: 'SET_USER', payload: session.user });
+      dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+      navigate('/admin', { replace: true });
+    }
+  }, [dispatch, navigate]);
 
-
+  // Form validation
   const validateForm = () => {
     const newErrors: any = {};
 
@@ -53,7 +52,7 @@ useEffect(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm() || isSubmitting) return;
 
     setErrors({});
@@ -61,36 +60,18 @@ useEffect(() => {
 
     try {
       if (isRegister) {
+        // Register the user
         await register(email, password, name);
       } else {
+        // Login the user
         await login(email, password);
       }
-      
-      // Navigation will be handled by the useEffect above
+      // Redirect is handled by useEffect if the user is authenticated
     } catch (error: any) {
       console.error('Auth error:', error);
       setErrors({ general: error.message || 'Error de autenticación. Intenta de nuevo.' });
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    switch (field) {
-      case 'email':
-        setEmail(value);
-        break;
-      case 'password':
-        setPassword(value);
-        break;
-      case 'name':
-        setName(value);
-        break;
-    }
-    
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev: any) => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -132,7 +113,7 @@ useEffect(() => {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  onChange={(e) => setName(e.target.value)}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors ${
                     errors.name ? 'border-red-300' : 'border-gray-300'
                   }`}
@@ -153,7 +134,7 @@ useEffect(() => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors ${
                     errors.email ? 'border-red-300' : 'border-gray-300'
                   }`}
@@ -174,7 +155,7 @@ useEffect(() => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors ${
                     errors.password ? 'border-red-300' : 'border-gray-300'
                   }`}
