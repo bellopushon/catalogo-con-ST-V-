@@ -944,14 +944,12 @@ useEffect(() => {
         throw sessionError;
       }
 
-      // Si hay sesión y el componente está montado, actualizamos el estado y redirigimos
       if (session?.user && isMounted) {
         console.log('✅ User found in session:', session.user.id);
         dispatch({ type: 'SET_USER', payload: session.user });
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-        navigate('/admin', { replace: true }); // Solo redirigimos si el usuario está autenticado
+        navigate('/admin', { replace: true }); // Redirige a /admin
       } else if (isMounted) {
-        // Si no hay sesión, establecemos autenticación como falsa
         dispatch({ type: 'SET_AUTHENTICATED', payload: false });
       }
     } catch (error) {
@@ -967,8 +965,7 @@ useEffect(() => {
   return () => {
     isMounted = false; // Cancelamos cualquier actualización de estado si el componente se desmonta
   };
-}, [dispatch, navigate]); // Dependencias clave
-
+}, [dispatch, navigate]); // Asegúrate de que navigate esté incluido en las dependencias
 
   return (
     <StoreContext.Provider value={{ 
