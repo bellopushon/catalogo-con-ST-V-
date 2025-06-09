@@ -18,15 +18,22 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     const savedSession = localStorage.getItem('supabase_session');
+
+    // Check if user is already authenticated in global state
+    if (state.isAuthenticated) {
+      navigate('/admin', { replace: true }); // Already authenticated, navigate to the dashboard
+      return;
+    }
+
+    // If no session in state, check localStorage and restore the session
     if (savedSession) {
       const session = JSON.parse(savedSession);
       dispatch({ type: 'SET_USER', payload: session.user });
       dispatch({ type: 'SET_AUTHENTICATED', payload: true });
       navigate('/admin', { replace: true });
     }
-  }, [dispatch, navigate]);
+  }, [state.isAuthenticated, dispatch, navigate]);
 
-  // Form validation
   const validateForm = () => {
     const newErrors: any = {};
 
@@ -66,7 +73,7 @@ export default function LoginPage() {
         // Login the user
         await login(email, password);
       }
-      // Redirect is handled by useEffect if the user is authenticated
+      // Redirect will be handled by useEffect if the user is authenticated
     } catch (error: any) {
       console.error('Auth error:', error);
       setErrors({ general: error.message || 'Error de autenticación. Intenta de nuevo.' });
