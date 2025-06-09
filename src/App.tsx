@@ -50,7 +50,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   
   if (!state.isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login\" replace />;
   }
   
   return <>{children}</>;
@@ -104,7 +104,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <LoginPage />
           )
@@ -149,7 +149,7 @@ function AppRoutes() {
         path="/" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <Navigate to="/login" replace />
           )
