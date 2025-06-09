@@ -1,8 +1,8 @@
-# Tutaviendo - WhatsApp Catalog Platform
+# 🛍️ Tutaviendo - Plataforma de Catálogos WhatsApp
 
-Una plataforma moderna para crear catálogos profesionales de WhatsApp. Permite a los usuarios crear tiendas online, gestionar productos y generar catálogos optimizados para compartir por WhatsApp.
+Una plataforma moderna y completa para crear catálogos profesionales de WhatsApp. Permite a los usuarios crear tiendas online, gestionar productos y generar catálogos optimizados para compartir por WhatsApp.
 
-## 🚀 Características Principales
+## 🌟 Características Principales
 
 ### 🏪 Gestión de Tiendas
 - **Múltiples tiendas** según el plan del usuario
@@ -41,7 +41,7 @@ Una plataforma moderna para crear catálogos profesionales de WhatsApp. Permite 
 - **Emprendedor**: 2 tiendas, 30 productos
 - **Profesional**: 5 tiendas, 50 productos
 
-## 🛠️ Tecnologías Utilizadas
+## 🚀 Tecnologías
 
 ### Frontend
 - **React 18** con TypeScript
@@ -56,41 +56,23 @@ Una plataforma moderna para crear catálogos profesionales de WhatsApp. Permite 
 - **Row Level Security (RLS)**
 - **Autenticación integrada**
 
-### Herramientas de Desarrollo
+### Herramientas
 - **Vite** como bundler
 - **ESLint** para linting
 - **TypeScript** para tipado estático
 
-## 🏗️ Arquitectura del Proyecto
-
-```
-src/
-├── components/           # Componentes React
-│   ├── auth/            # Autenticación
-│   ├── catalog/         # Catálogo público
-│   ├── dashboard/       # Panel de control
-│   ├── layout/          # Layouts y navegación
-│   ├── products/        # Gestión de productos
-│   ├── settings/        # Configuraciones
-│   └── ui/              # Componentes UI reutilizables
-├── contexts/            # Context providers
-├── lib/                 # Configuraciones de librerías
-├── utils/               # Utilidades y helpers
-└── types/               # Definiciones de tipos
-```
-
-## 🚀 Instalación y Desarrollo
+## 🏗️ Instalación y Desarrollo
 
 ### Prerrequisitos
 - Node.js 18+
-- npm o yarn
+- npm 8+
 - Cuenta de Supabase
 
-### Configuración
+### Configuración Local
 
 1. **Clonar el repositorio**
 ```bash
-git clone https://github.com/tu-usuario/tutaviendo.git
+git clone <repository-url>
 cd tutaviendo
 ```
 
@@ -106,8 +88,8 @@ cp .env.example .env
 
 Editar `.env` con tus credenciales de Supabase:
 ```env
-VITE_SUPABASE_URL=tu_supabase_url
-VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
+VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+VITE_SUPABASE_ANON_KEY=tu_anon_key_aqui
 ```
 
 4. **Ejecutar en desarrollo**
@@ -121,10 +103,47 @@ npm run dev
 - `npm run build` - Build de producción
 - `npm run preview` - Preview del build
 - `npm run lint` - Ejecutar ESLint
+- `npm run type-check` - Verificar tipos TypeScript
 
-## 🗄️ Esquema de Base de Datos
+## 🌐 Despliegue en Producción
 
-### Tablas Principales
+### Netlify (Recomendado)
+
+1. **Preparar el proyecto**
+```bash
+npm run build
+git add .
+git commit -m "Prepare for production deployment"
+git push origin main
+```
+
+2. **Configurar en Netlify**
+- Conectar repositorio en [app.netlify.com](https://app.netlify.com)
+- Build command: `npm run build`
+- Publish directory: `dist`
+- Node version: 18
+
+3. **Variables de entorno en Netlify**
+```
+VITE_SUPABASE_URL = https://tu-proyecto.supabase.co
+VITE_SUPABASE_ANON_KEY = tu_anon_key_aqui
+```
+
+4. **Configurar Supabase**
+- Agregar Site URL: `https://tu-sitio.netlify.app`
+- Agregar Redirect URLs: `https://tu-sitio.netlify.app/*`
+
+### Otras Plataformas
+
+El proyecto es compatible con:
+- **Vercel**
+- **Railway**
+- **Render**
+- **Firebase Hosting**
+
+## 🗄️ Base de Datos
+
+### Esquema Principal
 
 - **users** - Información de usuarios y suscripciones
 - **stores** - Configuración de tiendas
@@ -142,14 +161,14 @@ npm run dev
 
 ## 🔐 Seguridad
 
-- **Row Level Security (RLS)** habilitado en todas las tablas
-- **Políticas de acceso** granulares por usuario
+- **Row Level Security (RLS)** habilitado
+- **Políticas de acceso** granulares
 - **Autenticación segura** con Supabase Auth
 - **Validación de datos** en frontend y backend
 
-## 📱 Funcionalidades Móviles
+## 📱 Características Móviles
 
-- **Diseño responsive** para todos los dispositivos
+- **Diseño responsive** completo
 - **Navegación móvil** optimizada
 - **Catálogos móviles** nativos
 - **Integración WhatsApp** directa
@@ -199,3 +218,29 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 ---
 
 **Hecho con ❤️ para emprendedores que quieren vender más por WhatsApp**
+
+## 🔧 Solución de Problemas
+
+### Build Errors
+```bash
+# Limpiar cache y reinstalar
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+```
+
+### Variables de Entorno
+```bash
+# Verificar que las variables estén configuradas
+echo $VITE_SUPABASE_URL
+echo $VITE_SUPABASE_ANON_KEY
+```
+
+### Problemas de Autenticación
+- Verificar URLs en Supabase Dashboard
+- Verificar que las keys sean correctas
+- Revisar políticas RLS en Supabase
+
+---
+
+**Estado del Proyecto**: ✅ Listo para Producción
