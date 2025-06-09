@@ -87,7 +87,7 @@ function AppRoutes() {
       <Route path="/login" element={
         // Redirigir solo si ya está autenticado y la inicialización ha terminado
         state.isAuthenticated ? (
-          <Navigate to="/admin" replace />
+          <Navigate to="/admin\" replace />
         ) : (
           <LoginPage />
         )
@@ -131,7 +131,7 @@ function AppRoutes() {
         element={
           // Solo redirigir si ya se ha inicializado el estado
           state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -142,7 +142,7 @@ function AppRoutes() {
       <Route path="*" element={
         // Si la app no está inicializada, muestra la pantalla de carga
         state.isAuthenticated ? (
-          <Navigate to="/admin" replace />
+          <Navigate to="/admin\" replace />
         ) : (
           <Navigate to="/login" replace />
         )
