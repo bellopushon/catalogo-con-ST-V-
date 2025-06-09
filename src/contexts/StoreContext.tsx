@@ -879,60 +879,75 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ✅ CRITICAL FIX: Garantizar que isInitialized siempre se establezca
+  // Inicialización de autenticación simplificada
   useEffect(() => {
+    let isMounted = true;
+    
     const initializeAuth = async () => {
-      console.log('🔄 Starting authentication initialization...');
-      
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
         
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.warn('⚠️ Auth error during initialization:', error);
-          // No lanzar error, solo continuar sin usuario
+          console.warn('Session error:', error);
         }
         
-        if (user) {
-          console.log('✅ User found during initialization:', user.email);
-          
-          const { data: userData, error: userError } = await supabase
+        if (session?.user && isMounted) {
+          const { data: userData } = await supabase
             .from('users')
             .select('*')
-            .eq('id', user.id)
+            .eq('id', session.user.id)
             .single();
 
-          if (userError) {
-            console.warn('⚠️ Error loading user data:', userError);
-            // Continuar con datos básicos del usuario
-          }
-
-          const appUser = transformSupabaseUserToAppUser(user, userData);
+          const appUser = transformSupabaseUserToAppUser(session.user, userData);
           dispatch({ type: 'SET_USER', payload: appUser });
           dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
-          // Cargar tiendas del usuario
-          await loadUserStores(user.id);
-          
-          console.log('✅ User initialization completed');
-        } else {
-          console.log('ℹ️ No user found during initialization');
+          await loadUserStores(session.user.id);
+        } else if (isMounted) {
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
       } catch (error) {
-        console.error('❌ Critical error during authentication initialization:', error);
-        // Asegurar que el estado se establezca incluso si hay errores
-        dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+        console.error('Auth initialization error:', error);
+        if (isMounted) {
+          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+        }
       } finally {
-        // ✅ CRITICAL: SIEMPRE establecer isInitialized y isLoading
-        console.log('🏁 Authentication initialization finished');
-        dispatch({ type: 'SET_LOADING', payload: false });
-        dispatch({ type: 'SET_INITIALIZED', payload: true });
+        if (isMounted) {
+          dispatch({ type: 'SET_LOADING', payload: false });
+          dispatch({ type: 'SET_INITIALIZED', payload: true });
+        }
       }
     };
 
     initializeAuth();
+
+    // Escuchar cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        dispatch({ type: 'LOGOUT' });
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        const appUser = transformSupabaseUserToAppUser(session.user, userData);
+        dispatch({ type: 'SET_USER', payload: appUser });
+        dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+
+        await loadUserStores(session.user.id);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

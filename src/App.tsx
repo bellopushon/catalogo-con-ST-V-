@@ -41,30 +41,18 @@ function LoadingScreen() {
   );
 }
 
-// ✅ CRITICAL: ProtectedRoute that correctly verifies state
+// ProtectedRoute simplificado
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   
-  console.log('🔒 ProtectedRoute - Current state:', {
-    isAuthenticated: state.isAuthenticated,
-    user: state.user?.email,
-    isLoading: state.isLoading,
-    isInitialized: state.isInitialized
-  });
-  
-  // Show loading while initializing
   if (!state.isInitialized) {
-    console.log('⏳ Still initializing, showing loading screen');
     return <LoadingScreen />;
   }
   
-  // If not authenticated, redirect to login
   if (!state.isAuthenticated) {
-    console.log('❌ User not authenticated, redirecting to login');
-    return <Navigate to="/login\" replace />;
+    return <Navigate to="/login" replace />;
   }
   
-  console.log('✅ User is authenticated, rendering protected content');
   return <>{children}</>;
 }
 
@@ -72,14 +60,6 @@ function AppRoutes() {
   const { state } = useStore();
   const { isDarkMode } = useTheme();
   const location = useLocation();
-  
-  console.log('🚀 AppRoutes - Current state:', {
-    isAuthenticated: state.isAuthenticated,
-    user: state.user?.email,
-    pathname: location.pathname,
-    isLoading: state.isLoading,
-    isInitialized: state.isInitialized
-  });
   
   // Handle dark mode for admin routes only
   useEffect(() => {
@@ -114,7 +94,6 @@ function AppRoutes() {
   
   // Show loading screen while initializing
   if (!state.isInitialized) {
-    console.log('⏳ App not initialized, showing loading screen');
     return <LoadingScreen />;
   }
   
@@ -125,7 +104,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <LoginPage />
           )
@@ -170,7 +149,7 @@ function AppRoutes() {
         path="/" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <Navigate to="/login" replace />
           )
