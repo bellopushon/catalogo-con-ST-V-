@@ -928,14 +928,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 useEffect(() => {
   let isMounted = true;
-  let authSubscription: any = null;
 
   const initializeAuth = async () => {
     try {
-      console.log('🔄 Initializing authentication...');
       dispatch({ type: 'SET_LOADING', payload: true });
 
-      // Obtener la sesión actual de Supabase
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
@@ -943,99 +940,30 @@ useEffect(() => {
         throw sessionError;
       }
 
+      // Si hay sesión y el componente está montado, actualizamos el estado y redirigimos
       if (session?.user && isMounted) {
-        console.log('✅ Found existing session for user:', session.user.id);
-        
-        // Guardar el token en localStorage para persistir la sesión
-        localStorage.setItem('supabase_session', JSON.stringify(session));
-
-        // Cargar datos del usuario desde Supabase
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (userError) {
-          console.error('❌ User data error:', userError);
-          throw userError;
-        }
-
-        const appUser = transformSupabaseUserToAppUser(session.user, userData);
-        dispatch({ type: 'SET_USER', payload: appUser });
+        console.log('✅ User found in session:', session.user.id);
+        dispatch({ type: 'SET_USER', payload: session.user });
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-
-        // Cargar tiendas del usuario
-        await loadUserStores(session.user.id);
-        
-        console.log('✅ Authentication initialization complete');
-      } else {
-        console.log('ℹ️ No active session found');
+        navigate('/admin', { replace: true }); // Solo redirigimos si el usuario está autenticado
+      } else if (isMounted) {
+        // Si no hay sesión, establecemos autenticación como falsa
         dispatch({ type: 'SET_AUTHENTICATED', payload: false });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Auth initialization failed:', error);
       dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
-      dispatch({ type: 'SET_AUTHENTICATED', payload: false });
     } finally {
-      if (isMounted) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-        dispatch({ type: 'SET_INITIALIZED', payload: true });
-      }
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
-  // Inicializar la autenticación
   initializeAuth();
 
-  // Establecer listener de cambios de estado de autenticación
-  const setupAuthListener = () => {
-    authSubscription = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-
-      console.log('🔄 Auth state change:', event, session?.user?.id);
-
-      try {
-        if (event === 'SIGNED_OUT' || !session) {
-          console.log('👋 User signed out');
-          dispatch({ type: 'LOGOUT' });
-          localStorage.removeItem('supabase_session'); // Limpiar la sesión al cerrar sesión
-        } else if (event === 'SIGNED_IN' && session?.user) {
-          console.log('👋 User signed in:', session.user.id);
-          
-          // Guardar la sesión en localStorage
-          localStorage.setItem('supabase_session', JSON.stringify(session));
-
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const appUser = transformSupabaseUserToAppUser(session.user, userData);
-          dispatch({ type: 'SET_USER', payload: appUser });
-          dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-
-          await loadUserStores(session.user.id);
-        }
-      } catch (error) {
-        console.error('❌ Auth state change error:', error);
-      }
-    });
-  };
-
-  // Inicializar
-  initializeAuth();
-  setupAuthListener();
-
-  // Cleanup
   return () => {
-    isMounted = false;
-    if (authSubscription) {
-      authSubscription.data?.subscription?.unsubscribe();
-    }
+    isMounted = false; // Cancelamos cualquier actualización de estado si el componente se desmonta
   };
-}, []);
+}, [dispatch, navigate]); // Dependencias clave
 
 
   return (
