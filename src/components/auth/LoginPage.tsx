@@ -15,11 +15,17 @@ export default function LoginPage() {
   const { state, login, register } = useStore();
 
   // Redirect if already authenticated
-  useEffect(() => {
-    if (state.isAuthenticated) {
-      navigate('/admin', { replace: true });
-    }
-  }, [state.isAuthenticated, navigate]);
+useEffect(() => {
+  // Revisar si ya existe una sesión en el localStorage
+  const savedSession = localStorage.getItem('supabase_session');
+  if (savedSession) {
+    const session = JSON.parse(savedSession);
+    dispatch({ type: 'SET_USER', payload: session.user });
+    dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+    navigate('/admin', { replace: true }); // Redirigir si ya está autenticado
+  }
+}, [dispatch, navigate]);
+
 
   const validateForm = () => {
     const newErrors: any = {};
