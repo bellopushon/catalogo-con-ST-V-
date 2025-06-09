@@ -69,51 +69,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { state } = useStore();
+  const { state } = useStore(); // Asegúrate de que esta función esté correctamente importada
   const { isDarkMode } = useTheme();
   const location = useLocation();
 
-  // Handle dark mode for admin routes only
-  useEffect(() => {
-    const isAdminRoute = location.pathname.startsWith('/admin') || 
-                          location.pathname === '/profile' || 
-                          location.pathname === '/subscription';
-    
-    const isPublicRoute = location.pathname.startsWith('/store/') || 
-                         location.pathname === '/login';
-    
-    // Force light mode for public routes
-    if (isPublicRoute) {
-      document.documentElement.classList.remove('admin-dark');
-      document.body.classList.remove('admin-dark');
-    }
-    // Apply user preference only for admin routes
-    else if (isAdminRoute) {
-      if (isDarkMode) {
-        document.documentElement.classList.add('admin-dark');
-        document.body.classList.add('admin-dark');
-      } else {
-        document.documentElement.classList.remove('admin-dark');
-        document.body.classList.remove('admin-dark');
-      }
-    }
-    // Clean up for any other route
-    else {
-      document.documentElement.classList.remove('admin-dark');
-      document.body.classList.remove('admin-dark');
-    }
-  }, [location.pathname, isDarkMode]);
-  
+  // Esperar hasta que el estado esté completamente inicializado
+  if (!state.isInitialized) {
+    return <LoadingScreen />; // Si no está inicializado, mostrar la pantalla de carga
+  }
+
   return (
-    <Routes> 
+    <Routes>
+      {/* Public routes */}
       <Route path="/store/:slug" element={<PublicCatalog />} />
+      
+      {/* Login route */}
       <Route path="/login" element={
-        state.isInitialized && state.isAuthenticated ? (
+        // Redirigir solo si ya está autenticado y la inicialización ha terminado
+        state.isAuthenticated ? (
           <Navigate to="/admin" replace />
         ) : (
           <LoginPage />
         )
       } />
+
+      {/* Admin routes (protected) */}
       <Route path="/admin" element={
         <ProtectedRoute>
           <AdminLayout />
@@ -128,6 +108,8 @@ function AppRoutes() {
         <Route path="add-store" element={<AddStore />} />
         <Route path="stores" element={<StoreManager />} />
       </Route>
+
+      {/* Profile route (protected) */}
       <Route path="/profile" element={
         <ProtectedRoute>
           <AdminLayout>
@@ -135,28 +117,40 @@ function AppRoutes() {
           </AdminLayout>
         </ProtectedRoute>
       } />
+
+      {/* Subscription route (protected) */}
       <Route path="/subscription" element={
         <ProtectedRoute>
           <SubscriptionPage />
         </ProtectedRoute>
       } />
-      <Route path="/" element={
-        state.isInitialized ? (
-          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
-        ) : (
-          <LoadingScreen />
-        )
-      } />
+
+      {/* Default redirect based on authentication */}
+      <Route
+        path="/"
+        element={
+          // Solo redirigir si ya se ha inicializado el estado
+          state.isAuthenticated ? (
+            <Navigate to="/admin" replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* Catch-all route for non-matching paths */}
       <Route path="*" element={
-        state.isInitialized ? (
-          <Navigate to={state.isAuthenticated ? "/admin" : "/login"} replace />
+        // Si la app no está inicializada, muestra la pantalla de carga
+        state.isAuthenticated ? (
+          <Navigate to="/admin" replace />
         ) : (
-          <LoadingScreen />
+          <Navigate to="/login" replace />
         )
       } />
     </Routes>
   );
 }
+
 
 function App() {
   return (
