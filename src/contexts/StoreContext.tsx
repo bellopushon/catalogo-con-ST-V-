@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, Dispatch, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
+
 
 // Definición de tipos
 export interface User {
@@ -438,7 +440,9 @@ function transformAppStoreToSupabaseUpdate(storeData: Partial<Store>) {
 
 // Proveedor de contexto
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate(); // Aquí es donde importas y usas useNavigate
   const [state, dispatch] = useReducer(storeReducer, initialState);
+
 
   // Función para obtener límites por plan
   const getMaxStores = (): number => {
