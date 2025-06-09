@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { state, login, register } = useStore();
+  const { dispatch } = useStore();
 
   // Redirect if already authenticated
 useEffect(() => {
