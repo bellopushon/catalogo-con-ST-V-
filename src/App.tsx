@@ -127,7 +127,7 @@ function AppRoutes() {
         element={
           // If already authenticated, redirect to admin
           state.isInitialized && state.isAuthenticated ? (
-            <Navigate to="/admin" replace />
+            <Navigate to="/admin\" replace />
           ) : (
             <LoginPage />
           )
