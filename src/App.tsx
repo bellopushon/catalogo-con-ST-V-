@@ -29,7 +29,7 @@ import SubscriptionPage from './components/subscription/SubscriptionPage';
 // Public Components
 import PublicCatalog from './components/catalog/PublicCatalog';
 
-// 🔥 IMPROVED: Simplified loading component
+// 🔥 SIMPLIFIED: Loading component
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -41,7 +41,7 @@ function LoadingScreen() {
   );
 }
 
-// 🔥 IMPROVED: Simplified ProtectedRoute component
+// 🔥 SIMPLIFIED: ProtectedRoute component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   
@@ -52,7 +52,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   // Redirect to login if not authenticated
   if (!state.isAuthenticated) {
-    return <Navigate to="/login\" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   // User is authenticated, render content
@@ -107,7 +107,7 @@ function AppRoutes() {
         path="/login" 
         element={
           state.isAuthenticated ? (
-            <Navigate to="/admin\" replace />
+            <Navigate to="/admin" replace />
           ) : (
             <LoginPage />
           )

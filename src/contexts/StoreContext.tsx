@@ -880,35 +880,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 CRITICAL: Robust authentication initialization with timeout
+  // 🔥 OPTIMIZED: Simplified authentication initialization
   useEffect(() => {
     let isMounted = true;
-    let timeoutId: NodeJS.Timeout;
-    
+    let isInitializing = false;
+
     const initializeAuth = async () => {
+      if (isInitializing) return;
+      isInitializing = true;
+
       try {
-        console.log('🔄 Starting authentication initialization...');
-        
-        // 🚀 IMPROVED: Use getSession for better persistence
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.warn('⚠️ Session error:', sessionError);
-        }
+        // Get current session immediately
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user && isMounted) {
-          console.log('✅ User session found:', session.user.id);
-          
-          // User is authenticated - get user data
-          const { data: userData, error: userError } = await supabase
+          // User is authenticated
+          const { data: userData } = await supabase
             .from('users')
             .select('*')
             .eq('id', session.user.id)
             .single();
-
-          if (userError) {
-            console.warn('⚠️ Error fetching user data:', userError);
-          }
 
           const appUser = transformSupabaseUserToAppUser(session.user, userData);
           dispatch({ type: 'SET_USER', payload: appUser });
@@ -916,13 +907,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           // Load user stores
           await loadUserStores(session.user.id);
-          console.log('✅ User data and stores loaded successfully');
         } else if (isMounted) {
-          console.log('ℹ️ No user session found');
+          // No user authenticated
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
       } catch (error) {
-        console.error('❌ Auth initialization error:', error);
+        console.error('Auth initialization error:', error);
         if (isMounted) {
           dispatch({ type: 'SET_AUTHENTICATED', payload: false });
         }
@@ -930,35 +920,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           dispatch({ type: 'SET_LOADING', payload: false });
           dispatch({ type: 'SET_INITIALIZED', payload: true });
-          console.log('🏁 Authentication initialization finished');
         }
+        isInitializing = false;
       }
     };
 
-    // 🔥 CRITICAL: Add timeout to prevent infinite loading
-    timeoutId = setTimeout(() => {
-      if (isMounted && !state.isInitialized) {
-        console.warn('⚠️ Auth initialization timeout - forcing completion');
-        dispatch({ type: 'SET_LOADING', payload: false });
-        dispatch({ type: 'SET_INITIALIZED', payload: true });
-        dispatch({ type: 'SET_AUTHENTICATED', payload: false });
-      }
-    }, 10000); // 10 second timeout
-
+    // Initialize immediately
     initializeAuth();
 
-    // 🔄 Listen for auth changes with improved handling
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
       
-      console.log('🔄 Auth state change:', event, session?.user?.id);
-      
       if (event === 'SIGNED_OUT' || !session) {
-        console.log('👋 User signed out');
         dispatch({ type: 'LOGOUT' });
       } else if (event === 'SIGNED_IN' && session?.user) {
-        console.log('👋 User signed in:', session.user.id);
-        
         const { data: userData } = await supabase
           .from('users')
           .select('*')
@@ -970,27 +946,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
         await loadUserStores(session.user.id);
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('🔄 Token refreshed for user:', session.user.id);
-        // Token refreshed - user is still authenticated
-        // No need to reload everything, just ensure state is correct
-        if (!state.isAuthenticated) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const appUser = transformSupabaseUserToAppUser(session.user, userData);
-          dispatch({ type: 'SET_USER', payload: appUser });
-          dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-        }
       }
     });
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
