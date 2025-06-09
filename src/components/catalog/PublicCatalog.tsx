@@ -351,8 +351,7 @@ export default function PublicCatalog() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
                 style={{ 
-                  '--tw-ring-color': currentPalette.primary,
-                  focusRingColor: currentPalette.primary 
+                  '--tw-ring-color': currentPalette.primary
                 }}
                 autoFocus
               />
@@ -476,11 +475,8 @@ export default function PublicCatalog() {
                   {/* Product Info */}
                   <div className="p-3">
                     <h3
-                      className="font-medium text-gray-900 text-sm leading-tight mb-2 cursor-pointer transition-colors line-clamp-2"
+                      className="font-medium text-gray-900 text-sm leading-tight mb-2 cursor-pointer transition-colors line-clamp-2 hover:text-[var(--catalog-primary)]"
                       onClick={() => setSelectedProduct(product)}
-                      style={{ 
-                        ':hover': { color: currentPalette.primary }
-                      }}
                     >
                       {product.name}
                     </h3>
