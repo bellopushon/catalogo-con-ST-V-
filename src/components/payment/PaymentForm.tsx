@@ -40,7 +40,7 @@ export default function PaymentForm({
         throw new Error('La configuración de Supabase no está completa. Por favor configura las variables de entorno.');
       }
       
-      // Get authentication token
+      // Get authentication token AND user data
       const { data: { session } } = await supabase.auth.getSession();
       const userToken = session?.access_token;
       
@@ -48,9 +48,16 @@ export default function PaymentForm({
         throw new Error('No se pudo obtener el token de autenticación. Por favor inicia sesión nuevamente.');
       }
 
-      console.log('🔄 Creating payment session with Supabase URL:', supabaseUrl);
+      // IMPORTANTE: Obtener los datos del usuario
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user || !user.email) {
+        throw new Error('No se pudo obtener la información del usuario. Por favor inicia sesión nuevamente.');
+      }
 
-      // Create payment session - Use the Supabase URL directly
+      console.log('🔄 Creating payment session with user email:', user.email);
+
+      // Create payment session - AHORA INCLUYENDO userEmail y userName
       const response = await fetch(`${supabaseUrl}/functions/v1/stripe-create-payment`, {
         method: 'POST',
         headers: {
@@ -60,6 +67,8 @@ export default function PaymentForm({
         body: JSON.stringify({
           planId,
           userId,
+          userEmail: user.email, // AGREGADO: Email del usuario
+          userName: user.user_metadata?.name || user.email.split('@')[0], // AGREGADO: Nombre del usuario
           successUrl: `${window.location.origin}/payment/success?plan=${planId}`,
           cancelUrl: `${window.location.origin}/payment/cancel`
         })
