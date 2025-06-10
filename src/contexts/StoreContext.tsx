@@ -11,7 +11,7 @@ export interface User {
   avatar?: string;
   company?: string;
   location?: string;
-  plan: string; // Cambiado a string para IDs dinámicos
+  plan: string; // ID del plan (gratuito, emprendedor, profesional, etc.)
   subscriptionId?: string;
   subscriptionStatus?: 'active' | 'canceled' | 'expired';
   subscriptionStartDate?: string;
@@ -83,7 +83,7 @@ export interface Store {
   products: Product[];
 }
 
-// 🆕 NUEVO: Interfaz para planes dinámicos
+// Definición de plan
 export interface Plan {
   id: string;
   name: string;
@@ -104,7 +104,7 @@ export interface StoreState {
   user: User | null;
   stores: Store[];
   currentStore: Store | null;
-  plans: Plan[]; // 🆕 NUEVO: Array de planes dinámicos
+  plans: Plan[]; // Planes disponibles
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
@@ -116,7 +116,7 @@ const initialState: StoreState = {
   user: null,
   stores: [],
   currentStore: null,
-  plans: [], // 🆕 NUEVO: Inicializar array de planes
+  plans: [],
   isAuthenticated: false,
   isLoading: false,
   isInitialized: false,
@@ -128,7 +128,7 @@ type ActionType =
   | { type: 'SET_USER'; payload: User | null }
   | { type: 'SET_STORES'; payload: Store[] }
   | { type: 'SET_CURRENT_STORE'; payload: Store | null }
-  | { type: 'SET_PLANS'; payload: Plan[] } // 🆕 NUEVO: Acción para planes
+  | { type: 'SET_PLANS'; payload: Plan[] }
   | { type: 'ADD_STORE'; payload: Store }
   | { type: 'UPDATE_STORE'; payload: Partial<Store> }
   | { type: 'DELETE_STORE'; payload: string }
@@ -153,7 +153,7 @@ function storeReducer(state: StoreState, action: ActionType): StoreState {
       return { ...state, stores: action.payload };
     case 'SET_CURRENT_STORE':
       return { ...state, currentStore: action.payload };
-    case 'SET_PLANS': // 🆕 NUEVO: Manejar planes
+    case 'SET_PLANS':
       return { ...state, plans: action.payload };
     case 'ADD_STORE':
       const newStores = [...state.stores, action.payload];
@@ -307,7 +307,7 @@ const StoreContext = createContext<{
   createProduct: (productData: Omit<Product, 'id' | 'storeId' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
   updateProduct: (productData: Product) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
-  // 🆕 NUEVO: Funciones dinámicas de planes
+  // Funciones para planes
   loadPlans: () => Promise<void>;
   getFreePlan: () => Plan | null;
   getUserPlan: (user: User | null) => Plan | null;
@@ -331,7 +331,7 @@ const StoreContext = createContext<{
   createProduct: async () => ({} as Product),
   updateProduct: async () => {},
   deleteProduct: async () => {},
-  // 🆕 NUEVO: Implementaciones por defecto
+  // Implementaciones por defecto para planes
   loadPlans: async () => {},
   getFreePlan: () => null,
   getUserPlan: () => null,
@@ -354,7 +354,7 @@ function transformSupabaseUserToAppUser(supabaseUser: any, userData: any): User 
     avatar: userData?.avatar || undefined,
     company: userData?.company || undefined,
     location: userData?.location || undefined,
-    plan: userData?.plan || 'gratuito', // Ahora es string dinámico
+    plan: userData?.plan || 'gratuito',
     subscriptionId: userData?.subscription_id || undefined,
     subscriptionStatus: userData?.subscription_status || undefined,
     subscriptionStartDate: userData?.subscription_start_date || undefined,
@@ -366,7 +366,7 @@ function transformSupabaseUserToAppUser(supabaseUser: any, userData: any): User 
   };
 }
 
-// 🆕 NUEVO: Transformar planes de Supabase
+// Transformar planes de Supabase
 function transformSupabasePlanToAppPlan(planData: any): Plan {
   return {
     id: planData.id,
@@ -493,7 +493,7 @@ function transformAppStoreToSupabaseUpdate(storeData: Partial<Store>) {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(storeReducer, initialState);
 
-  // 🆕 NUEVO: Función para cargar planes desde la base de datos
+  // Función para cargar planes desde la base de datos
   const loadPlans = async (): Promise<void> => {
     try {
       console.log('🔄 Loading plans from database...');
@@ -521,23 +521,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🆕 NUEVO: Obtener plan gratuito
+  // Obtener plan gratuito
   const getFreePlan = (): Plan | null => {
     return state.plans.find(plan => plan.isFree && plan.isActive) || null;
   };
 
-  // 🆕 NUEVO: Obtener plan del usuario
+  // Obtener plan del usuario
   const getUserPlan = (user: User | null): Plan | null => {
     if (!user) return getFreePlan();
-    return state.plans.find(plan => plan.id === user.plan) || getFreePlan();
+    
+    // Buscar plan por ID
+    const userPlan = state.plans.find(plan => plan.id === user.plan);
+    
+    if (userPlan) return userPlan;
+    
+    // Si no se encuentra, intentar buscar por nombre (compatibilidad)
+    const planByName = state.plans.find(
+      plan => plan.name.toLowerCase() === user.plan.toLowerCase()
+    );
+    
+    return planByName || getFreePlan();
   };
 
-  // 🆕 NUEVO: Obtener plan por nivel
+  // Obtener plan por nivel
   const getPlanByLevel = (level: number): Plan | null => {
     return state.plans.find(plan => plan.level === level && plan.isActive) || null;
   };
 
-  // 🆕 NUEVO: Obtener límite máximo para usuario
+  // Obtener límite máximo para usuario
   const getMaxLimitForUser = (user: User | null, type: 'stores' | 'products' | 'categories'): number => {
     const userPlan = getUserPlan(user);
     if (!userPlan) {
@@ -558,7 +569,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🆕 ACTUALIZADO: Funciones de límites ahora dinámicas
+  // Funciones de límites ahora dinámicas
   const getMaxStores = (): number => {
     return getMaxLimitForUser(state.user, 'stores');
   };
@@ -571,7 +582,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return getMaxLimitForUser(state.user, 'categories');
   };
 
-  // 🆕 ACTUALIZADO: Función para verificar si puede crear tiendas ahora dinámica
+  // Función para verificar si puede crear tiendas
   const canCreateStore = (): boolean => {
     const maxStores = getMaxStores();
     const currentStoreCount = state.stores.length;
@@ -962,19 +973,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       
       if (data.user) {
+        // Buscar plan gratuito
+        await loadPlans();
+        const freePlan = getFreePlan();
+        const freePlanId = freePlan?.id || 'gratuito';
+        
         await supabase.from('users').insert({
           id: data.user.id,
           email: data.user.email!,
           name: name,
-          plan: 'gratuito'
+          plan: freePlanId
         });
 
-        const appUser = transformSupabaseUserToAppUser(data.user, { name, plan: 'gratuito' });
+        const appUser = transformSupabaseUserToAppUser(data.user, { name, plan: freePlanId });
         dispatch({ type: 'SET_USER', payload: appUser });
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
         // Cargar planes y tiendas del usuario
-        await loadPlans();
         await loadUserStores(data.user.id);
         
         console.log('✅ Registration successful');
@@ -1047,7 +1062,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🔥 CRITICAL FIX: Simplified and robust authentication initialization
+  // Inicialización de autenticación
   useEffect(() => {
     let isMounted = true;
 
@@ -1157,6 +1172,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             dispatch({ type: 'SET_USER', payload: appUser });
             dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
+            await loadPlans();
             await loadUserStores(session.user.id);
           } catch (error) {
             console.error('❌ Error handling auth state change:', error);
@@ -1171,7 +1187,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, []); // Empty dependency array
 
-  // 🚀 NUEVO: Listener para cambios de plan desde superadministrador
+  // Listener para cambios de plan desde superadministrador
   useEffect(() => {
     if (state.user?.id && state.isInitialized) {
       console.log('🔄 Setting up real-time plan change listener for user:', state.user.id);
@@ -1209,7 +1225,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               console.error('❌ Error reloading stores:', error);
             }
             
-            // 🆕 NUEVO: Obtener nombre del plan dinámicamente
+            // Obtener nombre del plan dinámicamente
             const newPlan = state.plans.find(p => p.id === newUserData.plan);
             const planDisplayName = newPlan?.name || newUserData.plan;
             
@@ -1270,7 +1286,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.user?.id, state.isInitialized]);
 
-  // 🆕 NUEVO: Listener para cambios en la tabla de planes
+  // Listener para cambios en la tabla de planes
   useEffect(() => {
     if (state.isInitialized) {
       console.log('🔄 Setting up real-time plans change listener');
@@ -1315,7 +1331,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createProduct,
       updateProduct,
       deleteProduct,
-      // 🆕 NUEVO: Funciones dinámicas de planes
+      // Funciones dinámicas de planes
       loadPlans,
       getFreePlan,
       getUserPlan,

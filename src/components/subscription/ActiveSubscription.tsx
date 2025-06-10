@@ -7,14 +7,14 @@ import { supabase } from '../../lib/supabase';
 import DowngradeWarningModal from './DowngradeWarningModal';
 
 export default function ActiveSubscription() {
-  const { state, dispatch, getUserPlan, plans } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const { isDarkMode } = useTheme();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showPlanSelection, setShowPlanSelection] = useState(false); // 🆕 NUEVO: Estado para mostrar selección de planes
-  const [selectedNewPlan, setSelectedNewPlan] = useState(''); // 🆕 NUEVO: Plan seleccionado para reactivación
+  const [showPlanSelection, setShowPlanSelection] = useState(false); // Estado para mostrar selección de planes
+  const [selectedNewPlan, setSelectedNewPlan] = useState(''); // Plan seleccionado para reactivación
   const [isCanceling, setIsCanceling] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -22,7 +22,7 @@ export default function ActiveSubscription() {
   const subscriptionEndDate = user?.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
   const daysRemaining = subscriptionEndDate ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
-  // 🆕 ACTUALIZADO: Obtener plan actual del usuario dinámicamente
+  // Obtener plan actual del usuario dinámicamente
   const userPlan = getUserPlan(user);
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function ActiveSubscription() {
     }
   };
 
-  // 🆕 NUEVO: Función para reactivar con plan seleccionado
+  // Función para reactivar con plan seleccionado
   const handleReactivateWithPlan = async (planId: string) => {
     try {
       setIsCanceling(true);
@@ -201,7 +201,7 @@ export default function ActiveSubscription() {
     }
   };
 
-  // 🆕 ACTUALIZADO: Función para mostrar selección de planes
+  // Función para mostrar selección de planes
   const handleShowPlanSelection = () => {
     setShowPlanSelection(true);
   };
@@ -249,7 +249,7 @@ export default function ActiveSubscription() {
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
-      // 🆕 ACTUALIZADO: Obtener nombre del plan dinámicamente
+      // Obtener nombre del plan dinámicamente
       const proPlan = state.plans.find(p => p.id === 'profesional');
       const planName = proPlan?.name || 'Profesional';
       
@@ -281,18 +281,18 @@ export default function ActiveSubscription() {
 
   const isCanceled = user?.subscriptionStatus === 'canceled';
   
-  // 🆕 ACTUALIZADO: Obtener información del plan dinámicamente
+  // Obtener información del plan dinámicamente
   const planName = userPlan?.name || 'Premium';
   const planPrice = userPlan?.price.toFixed(2) || '0.00';
 
-  // 🆕 ACTUALIZADO: Obtener límites del plan dinámicamente
+  // Obtener límites del plan dinámicamente
   const limits = {
     stores: userPlan?.maxStores || 1,
     products: userPlan?.maxProducts || 10,
     categories: userPlan?.maxCategories || 3
   };
 
-  // 🆕 NUEVO: Componente para selección de planes
+  // Componente para selección de planes
   const PlanSelectionModal = () => {
     const availablePlans = state.plans.filter(p => p.isActive && !p.isFree);
     
@@ -460,7 +460,7 @@ export default function ActiveSubscription() {
                     Puedes reactivar tu suscripción en cualquier momento
                   </p>
                 </div>
-                {/* 🆕 ACTUALIZADO: Botón para mostrar selección de planes */}
+                {/* Botón para mostrar selección de planes */}
                 <button
                   onClick={handleShowPlanSelection}
                   className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-all"
@@ -759,7 +759,7 @@ export default function ActiveSubscription() {
                 <Crown className="w-8 h-8 text-purple-600 admin-dark:text-purple-400" />
               </div>
               
-              {/* 🆕 ACTUALIZADO: Mostrar plan dinámicamente */}
+              {/* Mostrar plan dinámicamente */}
               {userPlan && userPlan.level < 3 && (
                 <>
                   <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
@@ -773,7 +773,7 @@ export default function ActiveSubscription() {
             </div>
             <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-purple-100'} rounded-lg p-4 mb-6`}>
               <div className="text-center">
-                {/* 🆕 ACTUALIZADO: Mostrar precio dinámicamente */}
+                {/* Mostrar precio dinámicamente */}
                 {userPlan && userPlan.level < 3 && (
                   <>
                     <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>$9.99/mes</div>
@@ -813,7 +813,7 @@ export default function ActiveSubscription() {
         excessStores={state.stores.length - 1}
       />
 
-      {/* 🆕 NUEVO: Modal de selección de planes */}
+      {/* Modal de selección de planes */}
       {showPlanSelection && <PlanSelectionModal />}
     </div>
   );
