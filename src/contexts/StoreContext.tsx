@@ -957,7 +957,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Función de registro
+  // Función de registro con mejor manejo de errores
   const register = async (email: string, password: string, name: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -984,7 +984,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      if (error) throw error;
+      if (error) {
+        // Mejorar el manejo de errores específicos
+        if (error.message.includes('User already registered') || 
+            error.message.includes('already registered') ||
+            error.message.includes('already been registered')) {
+          throw new Error('Este email ya está registrado. Por favor, inicia sesión o usa otro email.');
+        }
+        
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Este email ya está registrado. Por favor, inicia sesión o usa otro email.');
+        }
+        
+        if (error.message.includes('Password should be at least')) {
+          throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        }
+        
+        if (error.message.includes('Unable to validate email address')) {
+          throw new Error('El formato del email no es válido.');
+        }
+        
+        // Error genérico si no coincide con ninguno específico
+        throw new Error(error.message || 'Error al crear la cuenta. Intenta de nuevo.');
+      }
       
       if (data.user) {
         // Insertar usuario en la tabla users con el plan gratuito de la base de datos

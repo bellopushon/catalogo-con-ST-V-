@@ -32,7 +32,14 @@ export default function PaymentForm({
       const apiUrl = import.meta.env.VITE_SUPER_ADMIN_API_URL || '';
       
       if (!apiUrl) {
-        throw new Error('API URL not configured');
+        throw new Error('La configuración de pagos no está disponible. Por favor contacta al soporte técnico.');
+      }
+      
+      // Validate that the URL is not a placeholder
+      if (apiUrl.includes('your_super_admin_api_url_here') || 
+          apiUrl.includes('your-super-admin.netlify.app') ||
+          apiUrl === 'your_super_admin_api_url_here') {
+        throw new Error('La configuración de pagos no está completa. Por favor contacta al administrador.');
       }
       
       // Get authentication token
@@ -42,6 +49,8 @@ export default function PaymentForm({
       if (!userToken) {
         throw new Error('No se pudo obtener el token de autenticación');
       }
+
+      console.log('🔄 Creating payment session with API URL:', apiUrl);
 
       // Create payment session
       const response = await fetch(`${apiUrl}/functions/v1/stripe-create-payment`, {
@@ -59,20 +68,43 @@ export default function PaymentForm({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al crear la sesión de pago');
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error('El servicio de pagos no está disponible. Por favor contacta al soporte técnico.');
+        }
+        
+        if (response.status === 500) {
+          throw new Error('Error interno del servidor de pagos. Por favor intenta más tarde.');
+        }
+        
+        throw new Error(errorData.error || `Error del servidor (${response.status}). Por favor intenta más tarde.`);
       }
 
       const { url } = await response.json();
       
+      if (!url) {
+        throw new Error('No se pudo generar la URL de pago. Por favor intenta de nuevo.');
+      }
+      
+      console.log('✅ Payment session created, redirecting to:', url);
+      
       // Redirect to Stripe Checkout
       window.location.href = url;
     } catch (error: any) {
-      console.error('Error creating payment:', error);
-      showError(
-        'Error al procesar el pago', 
-        error.message || 'No se pudo iniciar el proceso de pago. Intenta de nuevo más tarde.'
-      );
+      console.error('❌ Error creating payment:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'No se pudo iniciar el proceso de pago. Intenta de nuevo más tarde.';
+      
+      if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+        errorMessage = 'No se pudo conectar con el servidor de pagos. Verifica tu conexión a internet e intenta de nuevo.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showError('Error al procesar el pago', errorMessage);
       setIsLoading(false);
       
       if (onCancel) {
