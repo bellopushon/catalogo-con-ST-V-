@@ -77,6 +77,23 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
     }
   };
 
+  // Obtener el siguiente plan recomendado dinámicamente
+  const getNextRecommendedPlan = () => {
+    if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
+    
+    // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
+    if (!userPlan.isFree) {
+      const nextLevel = userPlan.level + 1;
+      const nextPlan = state.plans.find(p => p.level === nextLevel && p.isActive);
+      return nextPlan || state.plans.filter(p => !p.isFree && p.isActive).pop(); // El último si no hay siguiente
+    }
+    
+    // Si es plan gratuito, recomendar el primer plan premium
+    return state.plans.find(p => !p.isFree && p.isActive);
+  };
+  
+  const recommendedPlan = getNextRecommendedPlan();
+
   const premiumFeatures = [
     'Hasta 5 tiendas diferentes',
     'Hasta 50 productos por tienda',
@@ -179,7 +196,7 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
               </div>
               <p className="text-gray-600 admin-dark:text-gray-300">
                 {userPlan && userPlan.level > 1 
-                  ? `Actualiza al plan Profesional para crear hasta 5 tiendas`
+                  ? `Actualiza al plan ${recommendedPlan?.name || 'Profesional'} para crear hasta ${recommendedPlan?.maxStores || 5} tiendas`
                   : 'Actualiza tu plan para crear múltiples tiendas y acceder a funciones avanzadas'
                 }
               </p>
@@ -198,13 +215,13 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
 
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-lg p-4 mb-6">
               <div className="text-center">
-                {userPlan && userPlan.level === 2 ? (
+                {recommendedPlan ? (
                   <>
                     <div className="flex items-center justify-center gap-2 mb-2">
-                      <span className="text-2xl font-bold text-gray-900 admin-dark:text-white">$9.99</span>
+                      <span className="text-2xl font-bold text-gray-900 admin-dark:text-white">${recommendedPlan.price.toFixed(2)}</span>
                       <span className="text-gray-600 admin-dark:text-gray-300">/mes</span>
                     </div>
-                    <p className="text-xs text-gray-500 admin-dark:text-gray-400">Plan Profesional</p>
+                    <p className="text-xs text-gray-500 admin-dark:text-gray-400">Plan {recommendedPlan.name}</p>
                   </>
                 ) : (
                   <>

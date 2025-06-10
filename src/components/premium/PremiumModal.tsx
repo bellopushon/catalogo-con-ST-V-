@@ -13,7 +13,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
   // Obtener plan actual del usuario
   const userPlan = getUserPlan(state.user);
   
-  // Obtener el siguiente plan recomendado
+  // Obtener el siguiente plan recomendado dinámicamente
   const getNextRecommendedPlan = () => {
     if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
     
@@ -120,7 +120,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
             ))}
           </div>
 
-          {/* Pricing */}
+          {/* Pricing - DYNAMIC */}
           {recommendedPlan && (
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-xl p-6 mb-6">
               <div className="text-center">
@@ -136,6 +136,26 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                 <p className="text-sm text-gray-600 admin-dark:text-gray-300">
                   Facturación mensual • Cancela cuando quieras
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Plans Comparison - DYNAMIC */}
+          {state.plans.filter(p => !p.isFree && p.isActive).length >= 2 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 admin-dark:from-gray-700 admin-dark:to-gray-800 rounded-xl p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-4">Compara los Planes</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {state.plans.filter(p => !p.isFree && p.isActive).slice(0, 2).map((plan, index) => (
+                  <div key={plan.id} className={`bg-white admin-dark:bg-gray-800 rounded-lg p-4 ${index === 1 ? 'border-2 border-indigo-200 admin-dark:border-indigo-700' : ''}`}>
+                    <h4 className="font-semibold text-gray-900 admin-dark:text-white mb-2">{plan.name}</h4>
+                    <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">${plan.price.toFixed(2)}/mes</div>
+                    <ul className="text-sm text-gray-600 admin-dark:text-gray-300 space-y-1">
+                      <li>• Hasta {plan.maxStores === 999999 ? '∞' : plan.maxStores} tienda{plan.maxStores > 1 ? 's' : ''}</li>
+                      <li>• {plan.maxProducts === 999999 ? '∞' : plan.maxProducts} productos por tienda</li>
+                      <li>• Analíticas {plan.level >= 3 ? 'completas' : 'avanzadas'}</li>
+                    </ul>
+                  </div>
+                ))}
               </div>
             </div>
           )}
