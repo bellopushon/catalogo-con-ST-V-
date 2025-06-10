@@ -26,6 +26,23 @@ export default function ActiveSubscription() {
   const subscriptionEndDate = user?.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
   const daysRemaining = subscriptionEndDate ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
+  // Obtener el siguiente plan recomendado dinámicamente
+  const getNextRecommendedPlan = () => {
+    if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
+    
+    // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
+    if (!userPlan.isFree) {
+      const nextLevel = userPlan.level + 1;
+      const nextPlan = state.plans.find(p => p.level === nextLevel && p.isActive);
+      return nextPlan || state.plans.filter(p => !p.isFree && p.isActive).pop(); // El último si no hay siguiente
+    }
+    
+    // Si es plan gratuito, recomendar el primer plan premium
+    return state.plans.find(p => !p.isFree && p.isActive);
+  };
+  
+  const recommendedPlan = getNextRecommendedPlan();
+
   useEffect(() => {
     // Verificar el estado de la suscripción al cargar
     const checkSubscriptionStatus = async () => {
@@ -218,10 +235,9 @@ export default function ActiveSubscription() {
         throw new Error('No user found');
       }
       
-      // Find the professional plan
-      const proPlan = state.plans.find(p => p.level === 3 && p.isActive);
-      if (!proPlan) {
-        throw new Error('Professional plan not found');
+      // Usar el plan recomendado dinámicamente
+      if (!recommendedPlan) {
+        throw new Error('No recommended plan found');
       }
       
       // Calculate new subscription end date (30 days from now)
@@ -232,7 +248,7 @@ export default function ActiveSubscription() {
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          plan: proPlan.id,
+          plan: recommendedPlan.id,
           subscription_status: 'active',
           subscription_start_date: new Date().toISOString(),
           subscription_end_date: subscriptionEndDate.toISOString(),
@@ -247,7 +263,7 @@ export default function ActiveSubscription() {
       // Update local state
       const updatedUser = {
         ...user!,
-        plan: proPlan.id,
+        plan: recommendedPlan.id,
         subscriptionStatus: 'active',
         subscriptionStartDate: new Date().toISOString(),
         subscriptionEndDate: subscriptionEndDate.toISOString(),
@@ -257,7 +273,7 @@ export default function ActiveSubscription() {
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
       success(
-        `¡Plan actualizado a ${proPlan.name}!`,
+        `¡Plan actualizado a ${recommendedPlan.name}!`,
         'Ahora tienes acceso a todas las funciones premium.'
       );
       
@@ -475,15 +491,15 @@ export default function ActiveSubscription() {
           )}
 
           {/* Upgrade Option for lower tier plans */}
-          {!isCanceled && userPlan && userPlan.level < 3 && (
+          {!isCanceled && userPlan && userPlan.level < 3 && recommendedPlan && (
             <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-gray-900 admin-dark:text-white">¿Necesitas más funciones?</h3>
                   <p className="text-sm text-gray-600 admin-dark:text-gray-300">
                     {userPlan.level === 1 
-                      ? 'Actualiza a un plan premium y obtén más tiendas y productos'
-                      : 'Actualiza al plan Profesional y obtén hasta 5 tiendas'
+                      ? `Actualiza a un plan premium y obtén más tiendas y productos`
+                      : `Actualiza al plan ${recommendedPlan.name} y obtén hasta ${recommendedPlan.maxStores} tiendas`
                     }
                   </p>
                 </div>
@@ -745,7 +761,7 @@ export default function ActiveSubscription() {
       )}
 
       {/* Upgrade Modal */}
-      {showUpgradeModal && (
+      {showUpgradeModal && recommendedPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
@@ -762,28 +778,22 @@ export default function ActiveSubscription() {
                 <Crown className="w-8 h-8 text-purple-600 admin-dark:text-purple-400" />
               </div>
               
-              {/* Mostrar plan dinámicamente */}
-              {userPlan && userPlan.level < 3 && (
-                <>
-                  <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
-                    Actualizar a Plan Profesional
-                  </h3> 
-                  <p className="text-gray-600 admin-dark:text-gray-300">
-                    Obtén hasta 5 tiendas y 50 productos por tienda
-                  </p>
-                </>
-              )}
+              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
+                Actualizar a Plan {recommendedPlan.name}
+              </h3>
+              <p className="text-gray-600 admin-dark:text-gray-300">
+                Obtén hasta {recommendedPlan.maxStores === 999999 ? '∞' : recommendedPlan.maxStores} tiendas y {recommendedPlan.maxProducts === 999999 ? '∞' : recommendedPlan.maxProducts} productos por tienda
+              </p>
             </div>
             <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-purple-100'} rounded-lg p-4 mb-6`}>
               <div className="text-center">
-                {/* Mostrar precio dinámicamente */}
-                {userPlan && userPlan.level < 3 && (
-                  <>
-                    <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>$9.99/mes</div>
-                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Diferencia: +${(9.99 - userPlan.price).toFixed(2)}/mes
-                    </p>
-                  </>
+                <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  ${recommendedPlan.price.toFixed(2)}/mes
+                </div>
+                {userPlan && (
+                  <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    Diferencia: +${(recommendedPlan.price - userPlan.price).toFixed(2)}/mes
+                  </p>
                 )}
               </div>
             </div>
