@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CreditCard, Lock, Shield } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { Plan } from '../../contexts/StoreContext';
 
 interface PaymentMethodFormProps {
-  plan: any;
+  plan: Plan; // 🆕 ACTUALIZADO: Usar tipo Plan dinámico
   onBack: () => void;
   onSuccess: (paymentData: any) => void;
   isProcessing: boolean;
@@ -157,12 +158,12 @@ export default function PaymentMethodForm({ plan, onBack, onSuccess, isProcessin
               <h3 className="font-medium text-gray-900 admin-dark:text-white">Plan {plan.name}</h3>
               <p className="text-sm text-gray-600 admin-dark:text-gray-300">Facturación mensual</p>
             </div>
-            <span className="text-xl font-bold text-gray-900 admin-dark:text-white">${plan.price}/mes</span>
+            <span className="text-xl font-bold text-gray-900 admin-dark:text-white">${plan.price.toFixed(2)}/mes</span>
           </div>
           
           <div className="flex items-center justify-between pt-3">
             <span className="font-semibold text-gray-900 admin-dark:text-white">Total</span>
-            <span className="text-xl font-bold text-gray-900 admin-dark:text-white">${plan.price}/mes</span>
+            <span className="text-xl font-bold text-gray-900 admin-dark:text-white">${plan.price.toFixed(2)}/mes</span>
           </div>
         </div>
 
@@ -325,7 +326,7 @@ export default function PaymentMethodForm({ plan, onBack, onSuccess, isProcessin
                 ) : (
                   <>
                     <Lock className="w-5 h-5" />
-                    Completar Pago - ${plan.price}/mes
+                    Completar Pago - ${plan.price.toFixed(2)}/mes
                   </>
                 )}
               </button>
@@ -362,7 +363,7 @@ export default function PaymentMethodForm({ plan, onBack, onSuccess, isProcessin
                     <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
                       <span className="text-blue-600 text-xs font-bold">PP</span>
                     </div>
-                    Pagar con PayPal - ${plan.price}/mes
+                    Pagar con PayPal - ${plan.price.toFixed(2)}/mes
                   </>
                 )}
               </button>

@@ -21,12 +21,19 @@ export default function DowngradeWarningModal({
   newPlan, 
   excessStores 
 }: DowngradeWarningModalProps) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const [selectedStoreToDelete, setSelectedStoreToDelete] = useState<string>('');
   const [isDeleting, setIsDeleting] = useState(false);
 
   if (!isOpen) return null;
+
+  // 🆕 ACTUALIZADO: Obtener nombres de planes dinámicamente
+  const currentPlanObj = state.plans.find(p => p.id === currentPlan);
+  const newPlanObj = state.plans.find(p => p.id === newPlan);
+  
+  const currentPlanName = currentPlanObj?.name || currentPlan;
+  const newPlanName = newPlanObj?.name || newPlan;
 
   const handleDeleteStore = async () => {
     if (!selectedStoreToDelete) {
@@ -76,22 +83,8 @@ export default function DowngradeWarningModal({
     }
   };
 
-  const planNames = {
-    gratuito: 'Gratis',
-    emprendedor: 'Emprendedor',
-    profesional: 'Profesional'
-  };
-
-  const getMaxStores = (plan: string) => {
-    switch (plan) {
-      case 'gratuito': return 1;
-      case 'emprendedor': return 2;
-      case 'profesional': return 5;
-      default: return 1;
-    }
-  };
-
-  const maxStoresAfterDowngrade = getMaxStores(newPlan);
+  // 🆕 ACTUALIZADO: Obtener límites de tiendas dinámicamente
+  const maxStoresAfterDowngrade = newPlanObj?.maxStores || 1;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -117,7 +110,7 @@ export default function DowngradeWarningModal({
 
         <div className="mb-6">
           <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
-            Al cambiar al plan <strong>{planNames[newPlan]}</strong>, solo puedes tener <strong>{maxStoresAfterDowngrade} tienda{maxStoresAfterDowngrade > 1 ? 's' : ''}</strong>. 
+            Al cambiar al plan <strong>{newPlanName}</strong>, solo puedes tener <strong>{maxStoresAfterDowngrade} tienda{maxStoresAfterDowngrade > 1 ? 's' : ''}</strong>. 
             Actualmente tienes <strong>{state.stores.length} tiendas</strong>.
           </p>
           

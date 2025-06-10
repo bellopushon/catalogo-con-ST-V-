@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase';
 import DowngradeWarningModal from './DowngradeWarningModal';
 
 export default function ActiveSubscription() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const { isDarkMode } = useTheme();
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -19,6 +19,9 @@ export default function ActiveSubscription() {
   const user = state.user;
   const subscriptionEndDate = user?.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
   const daysRemaining = subscriptionEndDate ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+
+  // 🆕 ACTUALIZADO: Obtener plan actual del usuario dinámicamente
+  const userPlan = getUserPlan(user);
 
   useEffect(() => {
     // Verificar el estado de la suscripción al cargar
@@ -69,7 +72,8 @@ export default function ActiveSubscription() {
   const handleCancelSubscription = async () => {
     // Check if user will exceed store limits after cancellation
     const currentStoreCount = state.stores.length;
-    const maxStoresAfterCancel = 1; // Free plan allows only 1 store
+    const freePlan = state.plans.find(p => p.isFree && p.isActive);
+    const maxStoresAfterCancel = freePlan?.maxStores || 1;
     
     if (currentStoreCount > maxStoresAfterCancel) {
       setShowCancelModal(false);
@@ -217,8 +221,12 @@ export default function ActiveSubscription() {
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
+      // 🆕 ACTUALIZADO: Obtener nombre del plan dinámicamente
+      const proPlan = state.plans.find(p => p.id === 'profesional');
+      const planName = proPlan?.name || 'Profesional';
+      
       success(
-        '¡Plan actualizado a Profesional!',
+        `¡Plan actualizado a ${planName}!`,
         'Ahora tienes acceso a todas las funciones premium.'
       );
       
@@ -244,22 +252,17 @@ export default function ActiveSubscription() {
   }
 
   const isCanceled = user?.subscriptionStatus === 'canceled';
-  const planName = user?.plan === 'emprendedor' ? 'Emprendedor' : user?.plan === 'profesional' ? 'Profesional' : 'Premium';
-  const planPrice = user?.plan === 'emprendedor' ? '4.99' : user?.plan === 'profesional' ? '9.99' : '19';
+  
+  // 🆕 ACTUALIZADO: Obtener información del plan dinámicamente
+  const planName = userPlan?.name || 'Premium';
+  const planPrice = userPlan?.price.toFixed(2) || '0.00';
 
-  // Get plan limits based on current plan
-  const getPlanLimits = () => {
-    switch (user?.plan) {
-      case 'emprendedor':
-        return { stores: 2, products: 30, categories: 'ilimitadas' };
-      case 'profesional':
-        return { stores: 5, products: 50, categories: 'ilimitadas' };
-      default:
-        return { stores: 10, products: 'ilimitados', categories: 'ilimitadas' };
-    }
+  // 🆕 ACTUALIZADO: Obtener límites del plan dinámicamente
+  const limits = {
+    stores: userPlan?.maxStores || 1,
+    products: userPlan?.maxProducts || 10,
+    categories: userPlan?.maxCategories || 3
   };
-
-  const limits = getPlanLimits();
 
   return (
     <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900">
@@ -340,14 +343,17 @@ export default function ActiveSubscription() {
             </div>
           )}
 
-          {/* Upgrade Option for Emprendedor users */}
-          {!isCanceled && user?.plan === 'emprendedor' && (
+          {/* Upgrade Option for lower tier plans */}
+          {!isCanceled && userPlan && userPlan.level < 3 && (
             <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">¿Necesitas más tiendas?</h3>
+                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">¿Necesitas más funciones?</h3>
                   <p className="text-sm text-gray-600 admin-dark:text-gray-300">
-                    Actualiza al plan Profesional y obtén hasta 5 tiendas
+                    {userPlan.level === 1 
+                      ? 'Actualiza a un plan premium y obtén más tiendas y productos'
+                      : 'Actualiza al plan Profesional y obtén hasta 5 tiendas'
+                    }
                   </p>
                 </div>
                 <button
@@ -362,15 +368,21 @@ export default function ActiveSubscription() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">{limits.stores}</div>
+              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
+                {limits.stores === 999999 ? '∞' : limits.stores}
+              </div>
               <div className="text-sm text-gray-600 admin-dark:text-gray-300">Tiendas máximas</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">{limits.products}</div>
+              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
+                {limits.products === 999999 ? '∞' : limits.products}
+              </div>
               <div className="text-sm text-gray-600 admin-dark:text-gray-300">Productos por tienda</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">∞</div>
+              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
+                {limits.categories === 999999 ? '∞' : limits.categories}
+              </div>
               <div className="text-sm text-gray-600 admin-dark:text-gray-300">Categorías por tienda</div>
             </div>
           </div>
@@ -432,13 +444,17 @@ export default function ActiveSubscription() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-600 admin-dark:text-gray-300">Tiendas</span>
                   <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {state.stores.length} / {limits.stores}
+                    {state.stores.length} / {limits.stores === 999999 ? '∞' : limits.stores}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full"
-                    style={{ width: `${Math.min((state.stores.length / limits.stores) * 100, 100)}%` }}
+                    style={{ 
+                      width: limits.stores === 999999 
+                        ? '5%' // Mostrar una barra mínima para ilimitado
+                        : `${Math.min((state.stores.length / limits.stores) * 100, 100)}%` 
+                    }}
                   ></div>
                 </div>
               </div>
@@ -447,10 +463,10 @@ export default function ActiveSubscription() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-600 admin-dark:text-gray-300">Productos (promedio por tienda)</span>
                   <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {Math.round(state.stores.reduce((total, store) => total + (store.products?.length || 0), 0) / Math.max(state.stores.length, 1))} / {limits.products}
+                    {Math.round(state.stores.reduce((total, store) => total + (store.products?.length || 0), 0) / Math.max(state.stores.length, 1))} / {limits.products === 999999 ? '∞' : limits.products}
                   </span>
                 </div>
-                {typeof limits.products === 'number' ? (
+                {limits.products !== 999999 ? (
                   <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
                     <div 
                       className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full"
@@ -470,12 +486,25 @@ export default function ActiveSubscription() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-gray-600 admin-dark:text-gray-300">Categorías</span>
-                  <span className="font-medium text-gray-900 admin-dark:text-white">Ilimitadas</span>
+                  <span className="font-medium text-gray-900 admin-dark:text-white">
+                    {limits.categories === 999999 ? '∞' : limits.categories}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-green-600 admin-dark:text-green-400">
-                  <Check className="w-4 h-4" />
-                  <span>Sin límites</span>
-                </div>
+                {limits.categories !== 999999 ? (
+                  <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
+                      style={{ 
+                        width: `${Math.min((state.currentStore?.categories.length || 0) / limits.categories * 100, 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-green-600 admin-dark:text-green-400">
+                    <Check className="w-4 h-4" />
+                    <span>Sin límites</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -573,7 +602,7 @@ export default function ActiveSubscription() {
                 {isCanceling ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Cancelando...
+                    <span>Cancelando...</span>
                   </>
                 ) : (
                   'Sí, Cancelar'
@@ -601,19 +630,30 @@ export default function ActiveSubscription() {
               <div className="w-16 h-16 bg-gradient-to-r from-purple-100 to-pink-100 admin-dark:from-purple-900/30 admin-dark:to-pink-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Crown className="w-8 h-8 text-purple-600 admin-dark:text-purple-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
-                Actualizar a Plan Profesional
-              </h3> 
-              <p className="text-gray-600 admin-dark:text-gray-300">
-                Obtén hasta 5 tiendas y 50 productos por tienda
-              </p>
+              
+              {/* 🆕 ACTUALIZADO: Mostrar plan dinámicamente */}
+              {userPlan && userPlan.level < 3 && (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
+                    Actualizar a Plan Profesional
+                  </h3> 
+                  <p className="text-gray-600 admin-dark:text-gray-300">
+                    Obtén hasta 5 tiendas y 50 productos por tienda
+                  </p>
+                </>
+              )}
             </div>
             <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-purple-100'} rounded-lg p-4 mb-6`}>
               <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>$9.99/mes</div>
-                <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                  Diferencia: +$5.00/mes
-                </p> 
+                {/* 🆕 ACTUALIZADO: Mostrar precio dinámicamente */}
+                {userPlan && userPlan.level < 3 && (
+                  <>
+                    <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>$9.99/mes</div>
+                    <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      Diferencia: +${(9.99 - userPlan.price).toFixed(2)}/mes
+                    </p>
+                  </>
+                )}
               </div>
             </div>
 
