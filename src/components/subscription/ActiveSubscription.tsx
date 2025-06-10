@@ -7,12 +7,14 @@ import { supabase } from '../../lib/supabase';
 import DowngradeWarningModal from './DowngradeWarningModal';
 
 export default function ActiveSubscription() {
-  const { state, dispatch, getUserPlan } = useStore();
+  const { state, dispatch, getUserPlan, plans } = useStore();
   const { success, error } = useToast();
   const { isDarkMode } = useTheme();
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showPlanSelection, setShowPlanSelection] = useState(false); // 🆕 NUEVO: Estado para mostrar selección de planes
+  const [selectedNewPlan, setSelectedNewPlan] = useState(''); // 🆕 NUEVO: Plan seleccionado para reactivación
   const [isCanceling, setIsCanceling] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -135,8 +137,11 @@ export default function ActiveSubscription() {
     }
   };
 
-  const handleReactivate = async () => {
+  // 🆕 NUEVO: Función para reactivar con plan seleccionado
+  const handleReactivateWithPlan = async (planId: string) => {
     try {
+      setIsCanceling(true);
+      
       // Get current user
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
@@ -144,11 +149,18 @@ export default function ActiveSubscription() {
         throw new Error('No user found');
       }
       
+      // Calculate subscription end date (30 days from now)
+      const subscriptionEndDate = new Date();
+      subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
+      
       // Update user in database
       const { error: updateError } = await supabase
         .from('users')
         .update({
+          plan: planId,
           subscription_status: 'active',
+          subscription_start_date: new Date().toISOString(),
+          subscription_end_date: subscriptionEndDate.toISOString(),
           subscription_canceled_at: null,
           updated_at: new Date().toISOString(),
         })
@@ -161,21 +173,37 @@ export default function ActiveSubscription() {
       // Update local state
       const updatedUser = {
         ...user!,
+        plan: planId,
         subscriptionStatus: 'active',
+        subscriptionStartDate: new Date().toISOString(),
+        subscriptionEndDate: subscriptionEndDate.toISOString(),
         subscriptionCanceledAt: undefined,
         updatedAt: new Date().toISOString(),
       };
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
+      // Obtener nombre del plan dinámicamente
+      const selectedPlan = state.plans.find(p => p.id === planId);
+      const planName = selectedPlan?.name || 'Premium';
+      
       success(
-        '¡Suscripción reactivada!',
+        `¡Suscripción reactivada con plan ${planName}!`,
         'Tu suscripción ha sido reactivada exitosamente.'
       );
+      
+      setShowPlanSelection(false);
     } catch (err: any) {
       console.error('Reactivation error:', err);
       error('Error al reactivar', err.message || 'No se pudo reactivar la suscripción. Intenta de nuevo.');
+    } finally {
+      setIsCanceling(false);
     }
+  };
+
+  // 🆕 ACTUALIZADO: Función para mostrar selección de planes
+  const handleShowPlanSelection = () => {
+    setShowPlanSelection(true);
   };
 
   const handleUpgradeToPro = async () => {
@@ -264,6 +292,105 @@ export default function ActiveSubscription() {
     categories: userPlan?.maxCategories || 3
   };
 
+  // 🆕 NUEVO: Componente para selección de planes
+  const PlanSelectionModal = () => {
+    const availablePlans = state.plans.filter(p => p.isActive && !p.isFree);
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white">Selecciona un Plan</h2>
+            <button
+              onClick={() => setShowPlanSelection(false)}
+              className="p-2 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <p className="text-gray-600 admin-dark:text-gray-300 mb-6">
+            Selecciona el plan con el que deseas reactivar tu suscripción:
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {availablePlans.map(plan => (
+              <div 
+                key={plan.id}
+                className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${
+                  selectedNewPlan === plan.id 
+                    ? 'border-indigo-500 bg-indigo-50 admin-dark:bg-indigo-900/30 admin-dark:border-indigo-400' 
+                    : 'border-gray-200 admin-dark:border-gray-600 hover:border-gray-300 admin-dark:hover:border-gray-500'
+                }`}
+                onClick={() => setSelectedNewPlan(plan.id)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">{plan.name}</h3>
+                  {selectedNewPlan === plan.id && (
+                    <Check className="w-5 h-5 text-indigo-600 admin-dark:text-indigo-400" />
+                  )}
+                </div>
+                
+                <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">
+                  ${plan.price.toFixed(2)}<span className="text-sm text-gray-500 admin-dark:text-gray-400">/mes</span>
+                </div>
+                
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Tiendas: {plan.maxStores === 999999 ? '∞' : plan.maxStores}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Productos: {plan.maxProducts === 999999 ? '∞' : plan.maxProducts}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Categorías: {plan.maxCategories === 999999 ? '∞' : plan.maxCategories}</span>
+                  </div>
+                </div>
+                
+                {plan.features && plan.features.length > 0 && (
+                  <div className="text-xs text-gray-500 admin-dark:text-gray-400">
+                    {Array.isArray(plan.features) && plan.features.slice(0, 3).map((feature, idx) => (
+                      <div key={idx}>{feature}</div>
+                    ))}
+                    {Array.isArray(plan.features) && plan.features.length > 3 && (
+                      <div>+{plan.features.length - 3} más...</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowPlanSelection(false)}
+              className="flex-1 px-4 py-3 border border-gray-300 admin-dark:border-gray-600 text-gray-700 admin-dark:text-gray-300 rounded-lg hover:bg-gray-50 admin-dark:hover:bg-gray-700 font-medium transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => handleReactivateWithPlan(selectedNewPlan)}
+              disabled={!selectedNewPlan || isCanceling}
+              className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isCanceling ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                'Reactivar Suscripción'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900">
       {/* Header */}
@@ -333,8 +460,9 @@ export default function ActiveSubscription() {
                     Puedes reactivar tu suscripción en cualquier momento
                   </p>
                 </div>
+                {/* 🆕 ACTUALIZADO: Botón para mostrar selección de planes */}
                 <button
-                  onClick={handleReactivate}
+                  onClick={handleShowPlanSelection}
                   className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-all"
                 >
                   Reactivar
@@ -684,6 +812,9 @@ export default function ActiveSubscription() {
         newPlan="gratuito"
         excessStores={state.stores.length - 1}
       />
+
+      {/* 🆕 NUEVO: Modal de selección de planes */}
+      {showPlanSelection && <PlanSelectionModal />}
     </div>
   );
 }
