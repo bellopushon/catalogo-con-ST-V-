@@ -592,23 +592,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Función para cerrar sesión
   const logout = async (): Promise<void> => {
     try {
+      console.log('🔄 Starting logout process...');
       dispatch({ type: 'SET_LOADING', payload: true });
       
       // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Logout error:', error);
+        console.error('❌ Supabase logout error:', error);
         throw error;
       }
+      
+      console.log('✅ Supabase signOut successful');
       
       // Limpiar estado local
       dispatch({ type: 'LOGOUT' });
       
-      console.log('✅ Logout successful');
+      // Limpiar cualquier dato de sesión en localStorage
+      localStorage.removeItem('tutaviendo-auth-token');
+      localStorage.removeItem('supabase.auth.token');
+      
+      console.log('✅ Local state cleared, logout complete');
+      
+      // Forzar redirección a login
+      window.location.href = '/login';
     } catch (error) {
       console.error('❌ Logout failed:', error);
       // Forzar logout local incluso si falla el logout remoto
       dispatch({ type: 'LOGOUT' });
+      
+      // Forzar redirección a login incluso si hay error
+      window.location.href = '/login';
+      
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -957,7 +971,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Función de registro con mejor manejo de errores
+  // Función de registro
   const register = async (email: string, password: string, name: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -984,29 +998,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      if (error) {
-        // Mejorar el manejo de errores específicos
-        if (error.message.includes('User already registered') || 
-            error.message.includes('already registered') ||
-            error.message.includes('already been registered')) {
-          throw new Error('Este email ya está registrado. Por favor, inicia sesión o usa otro email.');
-        }
-        
-        if (error.message.includes('Invalid login credentials')) {
-          throw new Error('Este email ya está registrado. Por favor, inicia sesión o usa otro email.');
-        }
-        
-        if (error.message.includes('Password should be at least')) {
-          throw new Error('La contraseña debe tener al menos 6 caracteres.');
-        }
-        
-        if (error.message.includes('Unable to validate email address')) {
-          throw new Error('El formato del email no es válido.');
-        }
-        
-        // Error genérico si no coincide con ninguno específico
-        throw new Error(error.message || 'Error al crear la cuenta. Intenta de nuevo.');
-      }
+      if (error) throw error;
       
       if (data.user) {
         // Insertar usuario en la tabla users con el plan gratuito de la base de datos

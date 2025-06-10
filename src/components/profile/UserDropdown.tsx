@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   User, 
   LogOut, 
@@ -26,9 +26,10 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const [showStoreSelector, setShowStoreSelector] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { state, logout, getUserPlan } = useStore();
+  const { state, logout } = useStore();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { success, error } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -49,21 +50,21 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
       setIsLoggingOut(true);
       setIsOpen(false);
       
-      console.log('🔄 Starting logout process...');
+      console.log('🔄 Starting logout process from UserDropdown...');
       
       await logout();
       
       success('Sesión cerrada', 'Has cerrado sesión correctamente');
       
-      // Force redirect to login
-      window.location.href = '/login';
+      // Navigate to login page
+      navigate('/login', { replace: true });
       
     } catch (err: any) {
-      console.error('❌ Logout error:', err);
+      console.error('❌ Logout error in UserDropdown:', err);
       error('Error al cerrar sesión', err.message || 'No se pudo cerrar la sesión. Intenta de nuevo.');
       
-      // Force logout anyway and redirect
-      window.location.href = '/login';
+      // Force navigate to login anyway
+      navigate('/login', { replace: true });
     } finally {
       setIsLoggingOut(false);
     }
@@ -82,7 +83,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const currentStore = state.currentStore;
   
   // Obtener plan del usuario usando la función del contexto
-  const userPlan = getUserPlan(user);
+  const userPlan = state.plans.find(p => p.id === user?.plan);
   
   // Determinar si el usuario tiene un plan premium
   const isPremiumUser = userPlan && !userPlan.isFree;
