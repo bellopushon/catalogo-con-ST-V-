@@ -26,7 +26,16 @@ interface MobileSidebarProps {
 
 export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const location = useLocation();
-  const { state } = useStore();
+  const { state, getUserPlan } = useStore();
+
+  // Obtener plan del usuario
+  const userPlan = getUserPlan(state.user);
+  
+  // Determinar si el usuario tiene un plan premium
+  const isPremiumUser = userPlan && !userPlan.isFree;
+  
+  // Obtener nombre del plan para mostrar
+  const planName = userPlan?.name || 'Gratuito';
 
   if (!isOpen) return null;
 
@@ -108,25 +117,22 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-gray-800 admin-dark:to-gray-900 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className={`w-3 h-3 rounded-full ${
-                state.user?.plan === 'profesional' ? 'bg-purple-500' :
-                state.user?.plan === 'emprendedor' ? 'bg-blue-500' : 'bg-gray-400'
+                userPlan?.level >= 3 ? 'bg-purple-500' :
+                userPlan?.level === 2 ? 'bg-blue-500' : 'bg-gray-400'
               }`}></div>
               <span className="font-semibold text-gray-900 admin-dark:text-white">
-                Plan {
-                  state.user?.plan === 'profesional' ? 'Profesional' :
-                  state.user?.plan === 'emprendedor' ? 'Emprendedor' : 'Gratis'
-                }
+                Plan {planName}
               </span>
             </div>
             <p className="text-sm text-gray-600 admin-dark:text-gray-300 mb-3">
-              {state.user?.plan === 'profesional' 
-                ? 'Tienes acceso a todas las funciones profesionales'
-                : state.user?.plan === 'emprendedor'
-                ? 'Tienes acceso a funciones avanzadas'
+              {isPremiumUser
+                ? userPlan?.level >= 3
+                  ? 'Tienes acceso a todas las funciones profesionales'
+                  : 'Tienes acceso a funciones avanzadas'
                 : 'Actualiza para desbloquear más funciones'
               }
             </p>
-            {state.user?.plan === 'gratuito' && (
+            {!isPremiumUser && (
               <Link
                 to="/subscription"
                 onClick={onClose}

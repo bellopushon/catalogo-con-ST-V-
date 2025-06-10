@@ -15,38 +15,27 @@ import { useStore } from '../../contexts/StoreContext';
 import { useToast } from '../../contexts/ToastContext';
 
 export default function StoreManager() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [storeToDelete, setStoreToDelete] = useState<any>(null);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Get plan limits
+  // Obtener plan actual del usuario
+  const userPlan = getUserPlan(state.user);
+
+  // Determinar si puede crear tiendas basado en el plan actual
   const canCreateStore = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    const currentStoreCount = state.stores?.length || 0;
+    if (!userPlan) return false;
     
-    switch (userPlan) {
-      case 'gratuito':
-        return currentStoreCount < 1;
-      case 'emprendedor':
-        return currentStoreCount < 2;
-      case 'profesional':
-        return currentStoreCount < 5;
-      default:
-        return false;
-    }
+    const currentStoreCount = state.stores.length;
+    return currentStoreCount < userPlan.maxStores;
   };
 
+  // Obtener el máximo de tiendas permitidas según el plan
   const getMaxStores = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    switch (userPlan) {
-      case 'gratuito': return 1;
-      case 'emprendedor': return 2;
-      case 'profesional': return 5;
-      default: return 1;
-    }
+    return userPlan?.maxStores || 1;
   };
 
   const handleDeleteStore = async (store: any) => {
@@ -62,7 +51,7 @@ export default function StoreManager() {
 
     try {
       // Check if this is the last store and user is on a paid plan
-      if ((state.stores?.length === 1) && (state.user?.plan === 'emprendedor' || state.user?.plan === 'profesional')) {
+      if ((state.stores?.length === 1) && userPlan && !userPlan.isFree) {
         error(
           'No puedes eliminar tu única tienda',
           'Los usuarios con plan de pago deben tener al menos una tienda activa.'
@@ -94,6 +83,12 @@ export default function StoreManager() {
     dispatch({ type: 'SET_CURRENT_STORE', payload: store });
     success('Tienda cambiada', `Ahora estás gestionando "${store.name}"`);
   };
+
+  // Determinar si el usuario está en un plan premium
+  const isPremiumUser = userPlan && !userPlan.isFree;
+
+  // Obtener nombre del plan para mostrar
+  const planName = userPlan?.name || 'Gratuito';
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -319,7 +314,7 @@ export default function StoreManager() {
         )}
       </div>
 
-      {/* Upgrade Prompt - FIXED DARK MODE */}
+      {/* Upgrade Prompt - Solo mostrar si no puede crear más tiendas */}
       {!canCreateStore() && (
         <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900 dark:to-orange-900 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
           <div className="flex items-center gap-4">
@@ -328,10 +323,12 @@ export default function StoreManager() {
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                Has alcanzado el límite de tu plan
+                Has alcanzado el límite de tu plan {planName}
               </h3>
               <p className="text-sm text-gray-900 dark:text-gray-100">
-                Actualiza tu plan para crear más tiendas y acceder a funciones avanzadas
+                {isPremiumUser 
+                  ? `Tu plan actual permite hasta ${getMaxStores()} tiendas. Considera actualizar a un plan superior.`
+                  : 'Actualiza tu plan para crear más tiendas y acceder a funciones avanzadas'}
               </p>
             </div>
             <Link

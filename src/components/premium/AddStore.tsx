@@ -13,8 +13,24 @@ export default function AddStore() {
     slug: '',
     description: '',
   });
-  const { state, createStore, canCreateStore, getMaxStores } = useStore();
+  const { state, createStore, getUserPlan } = useStore();
   const { success, error } = useToast();
+
+  // Obtener plan del usuario
+  const userPlan = getUserPlan(state.user);
+  
+  // Determinar si puede crear tiendas basado en el plan actual
+  const canCreateStore = () => {
+    if (!userPlan) return false;
+    
+    const currentStoreCount = state.stores.length;
+    return currentStoreCount < userPlan.maxStores;
+  };
+
+  // Obtener el máximo de tiendas permitidas según el plan
+  const getMaxStores = () => {
+    return userPlan?.maxStores || 1;
+  };
 
   const premiumFeatures = [
     {
@@ -277,7 +293,7 @@ export default function AddStore() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500 admin-dark:text-gray-400">
-                      0 productos
+                      {store.products?.length || 0} productos
                     </span>
                     {state.currentStore?.id === store.id && (
                       <span className="bg-indigo-100 admin-dark:bg-indigo-900 text-indigo-800 admin-dark:text-indigo-200 px-2 py-1 rounded-full text-xs font-medium">
@@ -295,13 +311,8 @@ export default function AddStore() {
   }
 
   // Show upgrade message for users who have reached their limit
-  const userPlan = state.user?.plan || 'gratuito';
-  const maxStores = getMaxStores();
-  const planNames = {
-    gratuito: 'Gratis',
-    emprendedor: 'Emprendedor',
-    profesional: 'Profesional'
-  };
+  // Obtener nombre del plan para mostrar
+  const planName = userPlan?.name || 'Gratuito';
 
   return (
     <div className="space-y-6">
@@ -321,7 +332,7 @@ export default function AddStore() {
 
           {/* Main Message */}
           <h2 className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-3">
-            Has alcanzado el límite de tiendas de tu plan {planNames[userPlan]}
+            Has alcanzado el límite de tiendas de tu plan {planName}
           </h2>
           <p className="text-lg text-gray-600 admin-dark:text-gray-300 mb-8">
             ¡Actualiza para seguir expandiendo tu negocio!
@@ -332,11 +343,11 @@ export default function AddStore() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-900 admin-dark:text-white">Plan Actual</p>
-                <p className="text-2xl font-bold text-gray-900 admin-dark:text-white">{planNames[userPlan]}</p>
+                <p className="text-2xl font-bold text-gray-900 admin-dark:text-white">{planName}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-600 admin-dark:text-gray-300">Tiendas</p>
-                <p className="text-lg font-semibold text-gray-900 admin-dark:text-white">{state.stores.length} / {maxStores}</p>
+                <p className="text-lg font-semibold text-gray-900 admin-dark:text-white">{state.stores.length} / {getMaxStores()}</p>
               </div>
             </div>
           </div>
