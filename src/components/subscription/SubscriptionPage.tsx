@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { supabase } from '../../lib/supabase';
 import PaymentMethodForm from './PaymentMethodForm';
 import ActiveSubscription from './ActiveSubscription';
+import PaymentForm from '../payment/PaymentForm';
 
 export default function SubscriptionPage() {
   const { state, dispatch, getUserPlan } = useStore();
@@ -314,13 +315,40 @@ export default function SubscriptionPage() {
       );
     }
     
+    // Usar el nuevo componente PaymentForm para Stripe
     return (
-      <PaymentMethodForm
-        plan={selectedPlanObj}
-        onBack={() => setShowPayment(false)}
-        onSuccess={handlePaymentSuccess}
-        isProcessing={isProcessing}
-      />
+      <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900">
+        <div className="bg-white admin-dark:bg-gray-800 border-b border-gray-200 admin-dark:border-gray-700">
+          <div className="max-w-2xl mx-auto px-4 py-6">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setShowPayment(false)}
+                className="p-2 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6 text-gray-900 admin-dark:text-white" />
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 admin-dark:text-white">Pago Seguro</h1>
+                <p className="text-gray-600 admin-dark:text-gray-300 mt-1">Completa tu suscripción al plan {selectedPlanObj.name}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto px-4 py-8">
+          <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 admin-dark:border-gray-700 p-6">
+            {/* Usar el componente de Stripe */}
+            <PaymentForm 
+              planId={selectedPlanObj.id}
+              userId={state.user?.id || ''}
+              planName={selectedPlanObj.name}
+              planPrice={selectedPlanObj.price}
+              onSuccess={handlePaymentSuccess}
+              onCancel={() => setShowPayment(false)}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -566,7 +594,7 @@ export default function SubscriptionPage() {
                 ¿Qué métodos de pago aceptan?
               </h4>
               <p className="text-gray-600 admin-dark:text-gray-300 text-sm">
-                Aceptamos tarjetas de crédito/débito (Visa, Mastercard, American Express) y PayPal.
+                Aceptamos tarjetas de crédito/débito (Visa, Mastercard, American Express) a través de Stripe, nuestro procesador de pagos seguro.
               </p>
             </div>
             
@@ -594,10 +622,31 @@ export default function SubscriptionPage() {
         <div className="text-center mt-8">
           <div className="inline-flex items-center gap-2 text-sm text-gray-500 admin-dark:text-gray-400">
             <Shield className="w-4 h-4" />
-            <span>Pagos seguros con encriptación SSL de 256 bits</span>
+            <span>Pagos seguros con Stripe y encriptación SSL de 256 bits</span>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function AlertTriangle(props: any) {
+  return (
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      {...props}
+    >
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+      <path d="M12 9v4"></path>
+      <path d="M12 17h.01"></path>
+    </svg>
   );
 }

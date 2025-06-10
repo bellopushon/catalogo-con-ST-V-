@@ -20,6 +20,7 @@ import ProfilePage from './components/profile/ProfilePage';
 import SubscriptionPage from './components/subscription/SubscriptionPage';
 import PublicCatalog from './components/catalog/PublicCatalog';
 import PricingPage from './components/pricing/PricingPage';
+import PaymentStatus from './components/payment/PaymentStatus';
 
 function LoadingScreen() {
   return (
@@ -82,7 +83,8 @@ function AppRoutes() {
     
     const isPublicRoute = location.pathname.startsWith('/store/') || 
                          location.pathname === '/login' ||
-                         location.pathname === '/pricing';
+                         location.pathname === '/pricing' ||
+                         location.pathname.startsWith('/payment/');
     
     // Force light mode for public routes
     if (isPublicRoute) {
@@ -125,6 +127,10 @@ function AppRoutes() {
           <LoginPage />
         )
       } />
+
+      {/* 💰 PAYMENT ROUTES */}
+      <Route path="/payment/success" element={<PaymentStatus />} />
+      <Route path="/payment/cancel" element={<PaymentStatus />} />
 
       {/* 🛡️ PROTECTED ADMIN ROUTES */}
       <Route path="/admin" element={
