@@ -94,7 +94,7 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
                 <h3 className="font-semibold text-orange-800 admin-dark:text-orange-200">Has alcanzado el límite de tu plan {userPlan?.name || 'Gratuito'}</h3>
                 <p className="text-sm text-orange-700 admin-dark:text-orange-300">
                   {userPlan ? 
-                    `Actualmente tienes ${state.stores.length}/${userPlan.maxStores} tiendas. Actualiza para crear más.` :
+                    `Actualmente tienes ${state.stores.length}/${userPlan.maxStores === 999999 ? '∞' : userPlan.maxStores} tiendas. Actualiza para crear más.` :
                     'Actualiza para crear más tiendas.'}
                 </p>
               </div>
