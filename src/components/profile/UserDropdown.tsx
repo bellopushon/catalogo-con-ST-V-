@@ -203,14 +203,14 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
                       <Store className="w-4 h-4 text-indigo-600 admin-dark:text-indigo-400" />
                     </div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-medium text-gray-900 admin-dark:text-white truncate">
+                      <p className="text-sm font-medium text-gray-900 admin-dark:text-white truncate" title={currentStore.name}>
                         {currentStore.name}
                       </p>
                       <p className="text-xs text-gray-500 admin-dark:text-gray-400">
                         {currentStore.products?.length || 0} productos
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <ChevronRight className="w-4 h-4 text-gray-400" />
                     </div>

@@ -11,12 +11,16 @@ export default function CategoryManager() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   
-  const { state, createCategory, updateCategory, deleteCategory, getMaxCategories } = useStore();
+  const { state, createCategory, updateCategory, deleteCategory, getMaxCategories, getUserPlan } = useStore();
   const { success, error } = useToast();
 
   const store = state.currentStore;
   const categories = store?.categories || [];
   const products = store?.products || [];
+
+  // Obtener plan del usuario
+  const userPlan = getUserPlan(state.user);
+  const planName = userPlan?.name || 'Gratuito';
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,8 +139,8 @@ export default function CategoryManager() {
             <h3 className="font-medium text-blue-900 admin-dark:text-blue-200">Límite de Categorías</h3>
             <p className="text-sm text-blue-800 admin-dark:text-blue-300">
               {maxCategories === 999999 
-                ? 'Categorías ilimitadas en tu plan'
-                : `Puedes crear hasta ${maxCategories} categorías en tu plan ${state.user?.plan}`
+                ? `Categorías ilimitadas en tu plan ${planName}`
+                : `Puedes crear hasta ${maxCategories} categorías en tu plan ${planName}`
               }
             </p>
           </div>
@@ -195,7 +199,7 @@ export default function CategoryManager() {
                   Límite alcanzado
                 </h4>
                 <p className="text-sm text-yellow-700 admin-dark:text-yellow-300">
-                  Has alcanzado el límite de {maxCategories} categorías para tu plan {state.user?.plan}.
+                  Has alcanzado el límite de {maxCategories} categorías para tu plan {planName}.
                 </p>
               </div>
             </div>

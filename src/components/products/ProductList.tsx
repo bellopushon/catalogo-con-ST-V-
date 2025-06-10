@@ -18,12 +18,16 @@ export default function ProductList() {
   const [isDuplicating, setIsDuplicating] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   
-  const { state, updateProduct, deleteProduct, getMaxProducts, createProduct } = useStore();
+  const { state, updateProduct, deleteProduct, getMaxProducts, createProduct, getUserPlan } = useStore();
   const { success, error } = useToast();
 
   const store = state.currentStore;
   const products = store?.products || [];
   const categories = store?.categories || [];
+
+  // Obtener plan del usuario
+  const userPlan = getUserPlan(state.user);
+  const planName = userPlan?.name || 'Gratuito';
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
@@ -155,7 +159,7 @@ export default function ProductList() {
       <div className="bg-blue-50 admin-dark:bg-blue-900/20 border border-blue-200 admin-dark:border-blue-700 rounded-lg p-3">
         <div className="flex items-center justify-between">
           <p className="text-sm text-blue-800 admin-dark:text-blue-300">
-            Puedes crear hasta {maxProducts} productos en tu plan {state.user?.plan}
+            Puedes crear hasta {maxProducts} productos en tu plan {planName}
           </p>
           <div className="font-bold text-blue-900 admin-dark:text-blue-200">
             {products.length} / {maxProducts}

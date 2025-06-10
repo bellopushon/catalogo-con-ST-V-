@@ -1,40 +1,66 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Crown, Store, Package, Palette, BarChart3, Headphones, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useStore } from '../../contexts/StoreContext';
 
 interface PremiumModalProps {
   onClose: () => void;
 }
 
-const premiumFeatures = [
-  {
-    icon: Store,
-    title: 'Múltiples Tiendas',
-    description: 'Crea hasta 10 tiendas diferentes con catálogos únicos'
-  },
-  {
-    icon: Package,
-    title: 'Más Productos y Categorías',
-    description: 'Sin límites en productos y categorías por tienda'
-  },
-  {
-    icon: Palette,
-    title: 'Temas Avanzados',
-    description: 'Acceso a temas premium y personalización avanzada'
-  },
-  {
-    icon: BarChart3,
-    title: 'Analíticas Detalladas',
-    description: 'Estadísticas avanzadas de visitas, productos y ventas'
-  },
-  {
-    icon: Headphones,
-    title: 'Soporte Prioritario',
-    description: 'Soporte técnico 24/7 con respuesta prioritaria'
-  },
-];
-
 export default function PremiumModal({ onClose }: PremiumModalProps) {
+  const { state, getUserPlan } = useStore();
+  
+  // Obtener planes disponibles
+  const availablePlans = state.plans.filter(p => p.isActive && !p.isFree);
+  
+  // Obtener plan actual del usuario
+  const userPlan = getUserPlan(state.user);
+  
+  // Determinar el siguiente plan recomendado
+  const getNextRecommendedPlan = () => {
+    if (!userPlan) return availablePlans[0];
+    
+    // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
+    if (!userPlan.isFree) {
+      const nextLevel = userPlan.level + 1;
+      const nextPlan = availablePlans.find(p => p.level === nextLevel);
+      return nextPlan || availablePlans[availablePlans.length - 1]; // El último si no hay siguiente
+    }
+    
+    // Si es plan gratuito, recomendar el primer plan premium
+    return availablePlans[0];
+  };
+  
+  const recommendedPlan = getNextRecommendedPlan();
+
+  const premiumFeatures = [
+    {
+      icon: Store,
+      title: 'Múltiples Tiendas',
+      description: recommendedPlan ? `Crea hasta ${recommendedPlan.maxStores} tiendas diferentes con catálogos únicos` : 'Crea múltiples tiendas con catálogos únicos'
+    },
+    {
+      icon: Package,
+      title: 'Más Productos y Categorías',
+      description: recommendedPlan ? `Hasta ${recommendedPlan.maxProducts} productos por tienda` : 'Más productos por tienda'
+    },
+    {
+      icon: Palette,
+      title: 'Personalización Avanzada',
+      description: 'Colores personalizados y sin marca de agua'
+    },
+    {
+      icon: BarChart3,
+      title: 'Analíticas Completas',
+      description: 'Estadísticas avanzadas con filtros detallados'
+    },
+    {
+      icon: Headphones,
+      title: 'Soporte Prioritario',
+      description: 'Soporte técnico prioritario con respuesta rápida'
+    },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -68,8 +94,12 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
        <Store className="w-4 h-4 text-white" />
      </div>
      <div>
-       <h3 className="font-semibold text-white">Has alcanzado el límite de tu plan Gratis</h3>
-       <p className="text-sm text-orange-100">Actualmente tienes 1/1 tiendas. Actualiza para crear más.</p>
+       <h3 className="font-semibold text-white">Has alcanzado el límite de tu plan {userPlan?.name || 'Gratuito'}</h3>
+       <p className="text-sm text-orange-100">
+         {userPlan ? 
+           `Actualmente tienes ${state.stores.length}/${userPlan.maxStores} tiendas. Actualiza para crear más.` :
+           'Actualiza para crear más tiendas.'}
+       </p>
      </div>
    </div>
  </div>
@@ -96,9 +126,13 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           {/* Pricing */}
           <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-xl p-6 mb-6">
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">Plan Premium</h3>
+              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
+                {recommendedPlan ? `Plan ${recommendedPlan.name}` : 'Plan Premium'}
+              </h3>
               <div className="flex items-center justify-center gap-2 mb-4">
-                <span className="text-4xl font-bold text-gray-900 admin-dark:text-white">$19</span>
+                <span className="text-4xl font-bold text-gray-900 admin-dark:text-white">
+                  ${recommendedPlan ? recommendedPlan.price.toFixed(2) : '9.99'}
+                </span>
                 <span className="text-gray-600 admin-dark:text-gray-300">/mes</span>
               </div>
               <p className="text-sm text-gray-600 admin-dark:text-gray-300">
