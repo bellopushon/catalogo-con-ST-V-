@@ -32,6 +32,21 @@ export default function AddStore() {
     return userPlan?.maxStores || 1;
   };
 
+  // Obtener el siguiente plan recomendado dinámicamente
+  const getNextRecommendedPlan = () => {
+    if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
+    
+    // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
+    if (!userPlan.isFree) {
+      const nextLevel = userPlan.level + 1;
+      const nextPlan = state.plans.find(p => p.level === nextLevel && p.isActive);
+      return nextPlan || state.plans.filter(p => !p.isFree && p.isActive).pop(); // El último si no hay siguiente
+    }
+    
+    // Si es plan gratuito, recomendar el primer plan premium
+    return state.plans.find(p => !p.isFree && p.isActive);
+  };
+
   const premiumFeatures = [
     {
       icon: Store,
@@ -129,6 +144,16 @@ export default function AddStore() {
       error('Error al crear tienda', err.message || 'No se pudo crear la tienda. Intenta de nuevo.');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleAddStore = () => {
+    if (canCreateStore()) {
+      // User can create more stores, redirect to add store page
+      window.location.href = '/admin/add-store';
+    } else {
+      // User has reached their limit, show premium modal
+      setShowPremiumModal(true);
     }
   };
 
@@ -313,6 +338,7 @@ export default function AddStore() {
   // Show upgrade message for users who have reached their limit
   // Obtener nombre del plan para mostrar
   const planName = userPlan?.name || 'Gratuito';
+  const nextRecommendedPlan = getNextRecommendedPlan();
 
   return (
     <div className="space-y-6">
@@ -408,28 +434,21 @@ export default function AddStore() {
                 ))}
               </div>
 
-              {/* Plans Comparison */}
+              {/* Plans Comparison - DYNAMIC */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 admin-dark:from-gray-700 admin-dark:to-gray-800 rounded-xl p-6 mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-4">Compara los Planes</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4">
-                    <h4 className="font-semibold text-gray-900 admin-dark:text-white mb-2">Plan Emprendedor</h4>
-                    <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">$4.99/mes</div>
-                    <ul className="text-sm text-gray-600 admin-dark:text-gray-300 space-y-1">
-                      <li>• Hasta 2 tiendas</li>
-                      <li>• 30 productos por tienda</li>
-                      <li>• Analíticas avanzadas</li>
-                    </ul>
-                  </div>
-                  <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4 border-2 border-indigo-200 admin-dark:border-indigo-700">
-                    <h4 className="font-semibold text-gray-900 admin-dark:text-white mb-2">Plan Profesional</h4>
-                    <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">$9.99/mes</div>
-                    <ul className="text-sm text-gray-600 admin-dark:text-gray-300 space-y-1">
-                      <li>• Hasta 5 tiendas</li>
-                      <li>• 50 productos por tienda</li>
-                      <li>• Analíticas completas</li>
-                    </ul>
-                  </div>
+                  {state.plans.filter(p => !p.isFree && p.isActive).slice(0, 2).map((plan, index) => (
+                    <div key={plan.id} className={`bg-white admin-dark:bg-gray-800 rounded-lg p-4 ${index === 1 ? 'border-2 border-indigo-200 admin-dark:border-indigo-700' : ''}`}>
+                      <h4 className="font-semibold text-gray-900 admin-dark:text-white mb-2">{plan.name}</h4>
+                      <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">${plan.price.toFixed(2)}/mes</div>
+                      <ul className="text-sm text-gray-600 admin-dark:text-gray-300 space-y-1">
+                        <li>• Hasta {plan.maxStores === 999999 ? '∞' : plan.maxStores} tienda{plan.maxStores > 1 ? 's' : ''}</li>
+                        <li>• {plan.maxProducts === 999999 ? '∞' : plan.maxProducts} productos por tienda</li>
+                        <li>• Analíticas {plan.level >= 3 ? 'completas' : 'avanzadas'}</li>
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               </div>
 
