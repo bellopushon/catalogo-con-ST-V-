@@ -29,17 +29,15 @@ export default function PaymentForm({
       setIsLoading(true);
       
       // Get API URL from environment variables
-      const apiUrl = import.meta.env.VITE_SUPER_ADMIN_API_URL || '';
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
       
-      if (!apiUrl) {
-        throw new Error('La configuración de pagos no está disponible. Por favor contacta al soporte técnico.');
+      if (!supabaseUrl) {
+        throw new Error('La configuración de Supabase no está disponible. Por favor contacta al soporte técnico.');
       }
       
       // Validate that the URL is not a placeholder
-      if (apiUrl.includes('your_super_admin_api_url_here') || 
-          apiUrl.includes('your-super-admin.netlify.app') ||
-          apiUrl === 'your_super_admin_api_url_here') {
-        throw new Error('La configuración de pagos no está completa. Por favor contacta al administrador.');
+      if (supabaseUrl.includes('your_supabase_project_url_here')) {
+        throw new Error('La configuración de Supabase no está completa. Por favor configura las variables de entorno.');
       }
       
       // Get authentication token
@@ -47,13 +45,13 @@ export default function PaymentForm({
       const userToken = session?.access_token;
       
       if (!userToken) {
-        throw new Error('No se pudo obtener el token de autenticación');
+        throw new Error('No se pudo obtener el token de autenticación. Por favor inicia sesión nuevamente.');
       }
 
-      console.log('🔄 Creating payment session with API URL:', apiUrl);
+      console.log('🔄 Creating payment session with Supabase URL:', supabaseUrl);
 
-      // Create payment session
-      const response = await fetch(`${apiUrl}/functions/v1/stripe-create-payment`, {
+      // Create payment session - Use the Supabase URL directly
+      const response = await fetch(`${supabaseUrl}/functions/v1/stripe-create-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,30 +66,36 @@ export default function PaymentForm({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorMessage = 'Error al crear la sesión de pago';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If we can't parse the JSON, use status text
+          errorMessage = `Error del servidor: ${response.status} ${response.statusText}`;
+        }
         
         // Handle specific error cases
         if (response.status === 404) {
-          throw new Error('El servicio de pagos no está disponible. Por favor contacta al soporte técnico.');
+          errorMessage = 'La función de pago no está disponible. Verifica que la función stripe-create-payment esté desplegada en Supabase.';
+        } else if (response.status === 401 || response.status === 403) {
+          errorMessage = 'No tienes permiso para realizar esta acción. Por favor inicia sesión nuevamente.';
         }
         
-        if (response.status === 500) {
-          throw new Error('Error interno del servidor de pagos. Por favor intenta más tarde.');
-        }
-        
-        throw new Error(errorData.error || `Error del servidor (${response.status}). Por favor intenta más tarde.`);
+        throw new Error(errorMessage);
       }
 
-      const { url } = await response.json();
+      const data = await response.json();
       
-      if (!url) {
+      if (!data.url) {
         throw new Error('No se pudo generar la URL de pago. Por favor intenta de nuevo.');
       }
       
-      console.log('✅ Payment session created, redirecting to:', url);
+      console.log('✅ Payment session created, redirecting to Stripe');
       
       // Redirect to Stripe Checkout
-      window.location.href = url;
+      window.location.href = data.url;
     } catch (error: any) {
       console.error('❌ Error creating payment:', error);
       
@@ -99,7 +103,7 @@ export default function PaymentForm({
       let errorMessage = 'No se pudo iniciar el proceso de pago. Intenta de nuevo más tarde.';
       
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-        errorMessage = 'No se pudo conectar con el servidor de pagos. Verifica tu conexión a internet e intenta de nuevo.';
+        errorMessage = 'No se pudo conectar con el servidor de pagos. Verifica que la función stripe-create-payment esté desplegada en Supabase y que las variables de entorno estén configuradas correctamente.';
       } else if (error.message) {
         errorMessage = error.message;
       }

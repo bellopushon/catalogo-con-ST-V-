@@ -57,7 +57,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { planId, successUrl, cancelUrl } = await req.json();
+    const { planId, userId, successUrl, cancelUrl } = await req.json();
 
     if (!planId || !successUrl || !cancelUrl) {
       return new Response(JSON.stringify({ error: "Missing required parameters" }), {
