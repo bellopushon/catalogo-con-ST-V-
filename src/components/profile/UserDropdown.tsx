@@ -9,7 +9,8 @@ import {
   Sun,
   Edit,
   ChevronRight,
-  CreditCard
+  CreditCard,
+  Crown
 } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -25,7 +26,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const [showStoreSelector, setShowStoreSelector] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { state, logout } = useStore();
+  const { state, logout, getUserPlan } = useStore();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { success, error } = useToast();
 
@@ -79,6 +80,28 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
 
   const user = state.user;
   const currentStore = state.currentStore;
+  
+  // Obtener plan del usuario usando la función del contexto
+  const userPlan = getUserPlan(user);
+  
+  // Determinar si el usuario tiene un plan premium
+  const isPremiumUser = userPlan && !userPlan.isFree;
+  
+  // Obtener nombre del plan para mostrar
+  const planName = userPlan?.name || 'Gratuito';
+  
+  // Determinar color del badge según el nivel del plan
+  const getPlanBadgeColor = () => {
+    if (!userPlan) return 'bg-gray-100 text-gray-600 admin-dark:bg-gray-700 admin-dark:text-gray-300';
+    
+    if (userPlan.level >= 3) {
+      return 'bg-purple-100 text-purple-800 admin-dark:bg-purple-900 admin-dark:text-purple-200';
+    } else if (userPlan.level === 2) {
+      return 'bg-blue-100 text-blue-800 admin-dark:bg-blue-900 admin-dark:text-blue-200';
+    } else {
+      return 'bg-gray-100 text-gray-600 admin-dark:bg-gray-700 admin-dark:text-gray-300';
+    }
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -145,14 +168,9 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
                   {user?.email || 'email@ejemplo.com'}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    user?.plan === 'profesional' 
-                      ? 'bg-purple-100 text-purple-800 admin-dark:bg-purple-900 admin-dark:text-purple-200'
-                      : user?.plan === 'emprendedor'
-                      ? 'bg-blue-100 text-blue-800 admin-dark:bg-blue-900 admin-dark:text-blue-200' 
-                      : 'bg-gray-100 text-gray-600 admin-dark:bg-gray-700 admin-dark:text-gray-300'
-                  }`}>
-                    {user?.plan === 'profesional' ? 'Profesional' : user?.plan === 'emprendedor' ? 'Emprendedor' : 'Gratis'}
+                  <span className={`text-xs px-2 py-1 rounded-full ${getPlanBadgeColor()}`}>
+                    {isPremiumUser && <Crown className="w-3 h-3 inline-block mr-1" />}
+                    {planName}
                   </span>
                 </div>
               </div>

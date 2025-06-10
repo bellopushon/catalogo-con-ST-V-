@@ -36,7 +36,7 @@ export default function Sidebar() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const storeSelectorRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -57,31 +57,19 @@ export default function Sidebar() {
     setShowStoreSelector(false);
   };
 
-  // ✅ FIXED: Correct logic for store creation limits
+  // Obtener plan del usuario usando la función del contexto
+  const userPlan = getUserPlan(state.user);
+
+  // Determinar si puede crear tiendas basado en el plan actual
   const canCreateStore = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    const currentStoreCount = state.stores.length;
+    if (!userPlan) return false;
     
-    switch (userPlan) {
-      case 'gratuito':
-        return currentStoreCount < 1;
-      case 'emprendedor':
-        return currentStoreCount < 2;
-      case 'profesional':
-        return currentStoreCount < 5;
-      default:
-        return false;
-    }
+    const currentStoreCount = state.stores.length;
+    return currentStoreCount < userPlan.maxStores;
   };
 
   const getMaxStores = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    switch (userPlan) {
-      case 'gratuito': return 1;
-      case 'emprendedor': return 2;
-      case 'profesional': return 5;
-      default: return 1;
-    }
+    return userPlan?.maxStores || 1;
   };
 
   const handleAddStore = () => {
@@ -199,7 +187,7 @@ export default function Sidebar() {
                     </button>
                   ))}
 
-                  {/* Add Store Button - ✅ FIXED: Dynamic text based on user's ability to create stores */}
+                  {/* Add Store Button - Texto dinámico basado en la capacidad del usuario */}
                   <button
                     onClick={handleAddStore}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 border-dashed transition-all ${

@@ -19,11 +19,12 @@ export default function ActiveSubscription() {
   const [isLoading, setIsLoading] = useState(true);
 
   const user = state.user;
+  
+  // Obtener plan actual del usuario
+  const userPlan = getUserPlan(user);
+  
   const subscriptionEndDate = user?.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
   const daysRemaining = subscriptionEndDate ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
-
-  // Obtener plan actual del usuario dinámicamente
-  const userPlan = getUserPlan(user);
 
   useEffect(() => {
     // Verificar el estado de la suscripción al cargar

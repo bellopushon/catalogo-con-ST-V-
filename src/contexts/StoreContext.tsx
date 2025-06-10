@@ -309,7 +309,7 @@ const StoreContext = createContext<{
   deleteProduct: (productId: string) => Promise<void>;
   // Funciones para planes
   loadPlans: () => Promise<void>;
-  getFreePlan: () => Plan | null;
+  getFreePlan: () => Plan |  null;
   getUserPlan: (user: User | null) => Plan | null;
   getPlanByLevel: (level: number) => Plan | null;
   getMaxLimitForUser: (user: User | null, type: 'stores' | 'products' | 'categories') => number;
@@ -1315,6 +1315,70 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     }
   }, [state.isInitialized]);
+
+  // NUEVO: Forzar recarga de datos de usuario periódicamente
+  useEffect(() => {
+    if (state.user?.id && state.isInitialized) {
+      // Función para recargar datos del usuario
+      const reloadUserData = async () => {
+        try {
+          console.log('🔄 Reloading user data to ensure plan synchronization...');
+          
+          // Obtener datos actualizados del usuario
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', state.user!.id)
+            .single();
+            
+          if (userError) {
+            console.error('❌ Error reloading user data:', userError);
+            return;
+          }
+          
+          if (userData) {
+            // Verificar si hay cambios en el plan o estado de suscripción
+            if (userData.plan !== state.user!.plan || 
+                userData.subscription_status !== state.user!.subscriptionStatus) {
+              
+              console.log('🔄 User data changed, updating state:', {
+                oldPlan: state.user!.plan,
+                newPlan: userData.plan,
+                oldStatus: state.user!.subscriptionStatus,
+                newStatus: userData.subscription_status
+              });
+              
+              // Actualizar usuario en el estado
+              const updatedUser = transformSupabaseUserToAppUser(
+                { id: state.user!.id, email: state.user!.email }, 
+                userData
+              );
+              
+              dispatch({ type: 'SET_USER', payload: updatedUser });
+              
+              // Recargar planes y tiendas para asegurar consistencia
+              await loadPlans();
+              await loadUserStores(state.user!.id);
+              
+              console.log('✅ User data and stores reloaded successfully');
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error in periodic user data reload:', error);
+        }
+      };
+      
+      // Recargar inmediatamente al montar
+      reloadUserData();
+      
+      // Configurar intervalo para recargar cada 60 segundos
+      const interval = setInterval(reloadUserData, 60000);
+      
+      return () => {
+        clearInterval(interval);
+      };
+    }
+  }, [state.user?.id, state.isInitialized]);
   
   return (
     <StoreContext.Provider value={{ 

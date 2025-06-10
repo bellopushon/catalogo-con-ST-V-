@@ -10,35 +10,23 @@ interface StoreSelectorProps {
 }
 
 export default function StoreSelector({ onClose }: StoreSelectorProps) {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
-  // ✅ FIXED: Same logic as sidebar - correct store creation limits
+  // Obtener plan del usuario usando la función del contexto
+  const userPlan = getUserPlan(state.user);
+  
+  // Determinar si puede crear tiendas basado en el plan actual
   const canCreateStore = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    const currentStoreCount = state.stores.length;
+    if (!userPlan) return false;
     
-    switch (userPlan) {
-      case 'gratuito':
-        return currentStoreCount < 1;
-      case 'emprendedor':
-        return currentStoreCount < 2;
-      case 'profesional':
-        return currentStoreCount < 5;
-      default:
-        return false;
-    }
+    const currentStoreCount = state.stores.length;
+    return currentStoreCount < userPlan.maxStores;
   };
 
   const getMaxStores = () => {
-    const userPlan = state.user?.plan || 'gratuito';
-    switch (userPlan) {
-      case 'gratuito': return 1;
-      case 'emprendedor': return 2;
-      case 'profesional': return 5;
-      default: return 1;
-    }
+    return userPlan?.maxStores || 1;
   };
 
   const handleStoreChange = async (store: any) => {
@@ -139,7 +127,7 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
             </button>
           ))}
 
-          {/* Add Store Button - ✅ FIXED: Dynamic text based on user's ability to create stores */}
+          {/* Add Store Button - Mostrar texto basado en la capacidad del usuario para crear tiendas */}
           <button
             onClick={handleAddStore}
             className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 border-dashed transition-all ${
@@ -171,7 +159,7 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
         </div>
       </div>
 
-      {/* Premium Modal - ✅ UPDATED: Better messaging for different plans */}
+      {/* Premium Modal - Mejorado con información dinámica del plan */}
       {showPremiumModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
@@ -190,8 +178,8 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
                 <Crown className="w-8 h-8 text-white" />
               </div>
               <p className="text-gray-600 admin-dark:text-gray-300">
-                {state.user?.plan === 'emprendedor' 
-                  ? 'Actualiza al plan Profesional para crear hasta 5 tiendas'
+                {userPlan && userPlan.level > 1 
+                  ? `Actualiza al plan Profesional para crear hasta 5 tiendas`
                   : 'Actualiza tu plan para crear múltiples tiendas y acceder a funciones avanzadas'
                 }
               </p>
@@ -210,7 +198,7 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
 
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-lg p-4 mb-6">
               <div className="text-center">
-                {state.user?.plan === 'emprendedor' ? (
+                {userPlan && userPlan.level === 2 ? (
                   <>
                     <div className="flex items-center justify-center gap-2 mb-2">
                       <span className="text-2xl font-bold text-gray-900 admin-dark:text-white">$9.99</span>

@@ -7,17 +7,22 @@ import PaymentMethodForm from './PaymentMethodForm';
 import ActiveSubscription from './ActiveSubscription';
 
 export default function SubscriptionPage() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
   const [selectedPlan, setSelectedPlan] = useState('emprendedor');
   const [showPayment, setShowPayment] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] =  useState(true);
 
-  // 🆕 ACTUALIZADO: Usar planes dinámicos
+  // Obtener planes dinámicamente
   const { plans } = state;
-  const currentPlan = state.user?.plan || 'gratuito';
-  const isCurrentlyPremium = currentPlan !== 'gratuito';
+  
+  // Obtener plan actual del usuario
+  const userPlan = getUserPlan(state.user);
+  const currentPlan = userPlan?.id || 'gratuito';
+  
+  // Determinar si el usuario tiene un plan premium
+  const isCurrentlyPremium = userPlan && !userPlan.isFree;
 
   // Actualizar los planes para marcar el plan actual
   useEffect(() => {
@@ -30,12 +35,12 @@ export default function SubscriptionPage() {
     setSelectedPlan(planId);
     
     // Si el plan seleccionado es premium y el usuario no tiene un plan premium actualmente
-    if (planId !== 'gratuito' && currentPlan === 'gratuito') {
+    if (planId !== 'gratuito' && !isCurrentlyPremium) {
       setShowPayment(true);
     }
     
     // Si el usuario ya tiene un plan premium y quiere cambiar a otro plan premium
-    else if (planId !== 'gratuito' && currentPlan !== 'gratuito' && planId !== currentPlan) {
+    else if (planId !== 'gratuito' && isCurrentlyPremium && planId !== currentPlan) {
       // Mostrar confirmación para cambiar entre planes premium
       if (window.confirm(`¿Estás seguro de que quieres cambiar al plan ${planId}?`)) {
         handlePlanChange(planId);
@@ -43,7 +48,7 @@ export default function SubscriptionPage() {
     }
     
     // Si el usuario quiere volver al plan gratuito desde un plan premium
-    else if (planId === 'gratuito' && currentPlan !== 'gratuito') {
+    else if (planId === 'gratuito' && isCurrentlyPremium) {
       if (window.confirm('¿Estás seguro de que quieres volver al plan gratuito? Perderás todas las funciones premium.')) {
         handleDowngrade();
       }
@@ -93,7 +98,7 @@ export default function SubscriptionPage() {
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
-      // 🆕 ACTUALIZADO: Obtener nombre del plan dinámicamente
+      // Obtener nombre del plan dinámicamente
       const selectedPlanObj = plans.find(p => p.id === newPlan);
       const planName = selectedPlanObj?.name || newPlan;
       
@@ -227,7 +232,7 @@ export default function SubscriptionPage() {
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
-      // 🆕 ACTUALIZADO: Obtener nombre del plan dinámicamente
+      // Obtener nombre del plan dinámicamente
       const selectedPlanObj = plans.find(p => p.id === selectedPlan);
       const planName = selectedPlanObj?.name || 'Premium';
       
@@ -279,7 +284,7 @@ export default function SubscriptionPage() {
     return <ActiveSubscription />;
   }
 
-  // 🆕 ACTUALIZADO: Mostrar planes dinámicos
+  // Mostrar planes dinámicamente
   const premiumFeatures = [
     {
       icon: Store,
