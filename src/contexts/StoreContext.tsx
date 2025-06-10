@@ -963,6 +963,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_AUTH_ERROR', payload: null });
       
+      // Primero cargar planes para asegurarnos de que estén disponibles
+      await loadPlans();
+      
+      // Obtener el plan gratuito de la base de datos
+      const freePlan = getFreePlan();
+      
+      if (!freePlan) {
+        console.error('❌ No free plan found in database');
+        throw new Error('No se pudo encontrar un plan gratuito. Por favor contacta al soporte.');
+      }
+      
+      console.log('✅ Using free plan for registration:', freePlan.id, freePlan.name);
+      
       const { data, error } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -970,29 +983,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           data: { name }
         }
       });
+      
       if (error) throw error;
       
       if (data.user) {
-        // Buscar plan gratuito
-        await loadPlans();
-        const freePlan = getFreePlan();
-        const freePlanId = freePlan?.id || 'gratuito';
-        
-        await supabase.from('users').insert({
+        // Insertar usuario en la tabla users con el plan gratuito de la base de datos
+        const { error: insertError } = await supabase.from('users').insert({
           id: data.user.id,
           email: data.user.email!,
           name: name,
-          plan: freePlanId
+          plan: freePlan.id  // Usar el ID del plan gratuito de la base de datos
         });
+        
+        if (insertError) {
+          console.error('❌ Error inserting user data:', insertError);
+          throw insertError;
+        }
 
-        const appUser = transformSupabaseUserToAppUser(data.user, { name, plan: freePlanId });
+        const appUser = transformSupabaseUserToAppUser(data.user, { 
+          name, 
+          plan: freePlan.id,
+          created_at: new Date().toISOString()
+        });
+        
         dispatch({ type: 'SET_USER', payload: appUser });
         dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
-        // Cargar planes y tiendas del usuario
+        // Cargar tiendas del usuario (no debería haber ninguna todavía)
         await loadUserStores(data.user.id);
         
-        console.log('✅ Registration successful');
+        console.log('✅ Registration successful with plan:', freePlan.name);
       }
     } catch (error: any) {
       console.error('❌ Registration error:', error);
