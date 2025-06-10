@@ -18,7 +18,7 @@ export default function PaymentStatus() {
     const updateUserPlan = async () => {
       try {
         if (isSuccess && planId) {
-          // Obtener el plan de la base de datos
+          // Get plan details from database
           const { data: planData, error: planError } = await supabase
             .from('plans')
             .select('*')
@@ -32,7 +32,7 @@ export default function PaymentStatus() {
             return;
           }
           
-          // Obtener usuario actual
+          // Get current user
           const { data: { user } } = await supabase.auth.getUser();
           
           if (!user) {
@@ -41,11 +41,11 @@ export default function PaymentStatus() {
             return;
           }
           
-          // Calcular fecha de fin de suscripción (30 días)
+          // Calculate subscription end date (30 days)
           const subscriptionEndDate = new Date();
           subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
           
-          // Actualizar usuario en la base de datos
+          // Update user in database
           const { error: updateError } = await supabase
             .from('users')
             .update({
@@ -65,7 +65,7 @@ export default function PaymentStatus() {
             return;
           }
           
-          // Actualizar estado local
+          // Update local state
           if (state.user) {
             const updatedUser = {
               ...state.user,
@@ -83,7 +83,7 @@ export default function PaymentStatus() {
           setStatus('success');
           setMessage(`¡Felicidades! Tu suscripción al plan ${planData.name} ha sido activada correctamente.`);
           
-          // Redirigir al dashboard después de 3 segundos
+          // Redirect to dashboard after 3 seconds
           setTimeout(() => {
             navigate('/admin');
           }, 3000);

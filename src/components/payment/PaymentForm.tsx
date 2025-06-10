@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { useToast } from '../../contexts/ToastContext';
 import { supabase } from '../../lib/supabase';
-
-// Cargar Stripe con la clave pública
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+import { Shield, CreditCard } from 'lucide-react';
 
 interface PaymentFormProps {
   planId: string;
@@ -30,7 +28,14 @@ export default function PaymentForm({
     try {
       setIsLoading(true);
       
-      // Obtener token de autenticación
+      // Get API URL from environment variables
+      const apiUrl = import.meta.env.VITE_SUPER_ADMIN_API_URL || '';
+      
+      if (!apiUrl) {
+        throw new Error('API URL not configured');
+      }
+      
+      // Get authentication token
       const { data: { session } } = await supabase.auth.getSession();
       const userToken = session?.access_token;
       
@@ -38,8 +43,8 @@ export default function PaymentForm({
         throw new Error('No se pudo obtener el token de autenticación');
       }
 
-      // Crear sesión de pago en Stripe
-      const response = await fetch(`${import.meta.env.VITE_SUPER_ADMIN_API_URL}/functions/v1/stripe-create-payment`, {
+      // Create payment session
+      const response = await fetch(`${apiUrl}/functions/v1/stripe-create-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,12 +60,12 @@ export default function PaymentForm({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al crear la sesión de pago');
+        throw new Error(errorData.error || 'Error al crear la sesión de pago');
       }
 
       const { url } = await response.json();
       
-      // Redirigir a Stripe Checkout
+      // Redirect to Stripe Checkout
       window.location.href = url;
     } catch (error: any) {
       console.error('Error creating payment:', error);
@@ -78,15 +83,31 @@ export default function PaymentForm({
 
   return (
     <div className="text-center">
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+      <div className="mb-8">
+        <div className="w-16 h-16 bg-gradient-to-r from-indigo-100 to-purple-100 admin-dark:from-indigo-900/30 admin-dark:to-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CreditCard className="w-8 h-8 text-indigo-600 admin-dark:text-indigo-400" />
+        </div>
+        
+        <h3 className="text-xl font-bold text-gray-900 admin-dark:text-white mb-2">
           Suscripción al Plan {planName}
         </h3>
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
+        <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
           Serás redirigido a Stripe para completar tu pago de forma segura
         </p>
-        <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          ${planPrice.toFixed(2)}<span className="text-sm text-gray-500 dark:text-gray-400">/mes</span>
+        <div className="text-3xl font-bold text-gray-900 admin-dark:text-white mb-2">
+          ${planPrice.toFixed(2)}<span className="text-sm text-gray-500 admin-dark:text-gray-400">/mes</span>
+        </div>
+      </div>
+      
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-lg p-4 mb-8">
+        <div className="flex items-center gap-3">
+          <Shield className="w-5 h-5 text-indigo-600 admin-dark:text-indigo-400" />
+          <div>
+            <h4 className="font-medium text-gray-900 admin-dark:text-white text-left">Pago Seguro con Stripe</h4>
+            <p className="text-sm text-gray-600 admin-dark:text-gray-300 text-left">
+              Tus datos de pago están protegidos con encriptación SSL de 256 bits
+            </p>
+          </div>
         </div>
       </div>
       
@@ -111,19 +132,23 @@ export default function PaymentForm({
         )}
       </button>
       
-      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M12 16V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <span>Pago seguro con encriptación SSL de 256 bits</span>
+      <div className="mt-6 text-center">
+        <p className="text-xs text-gray-500 admin-dark:text-gray-400">
+          Al completar el pago, aceptas nuestros{' '}
+          <a href="#" className="text-indigo-600 admin-dark:text-indigo-400 hover:underline">
+            Términos de Servicio
+          </a>{' '}
+          y{' '}
+          <a href="#" className="text-indigo-600 admin-dark:text-indigo-400 hover:underline">
+            Política de Privacidad
+          </a>
+        </p>
       </div>
       
       {onCancel && (
         <button
           onClick={onCancel}
-          className="mt-6 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors"
+          className="mt-4 text-gray-600 admin-dark:text-gray-300 hover:text-gray-800 admin-dark:hover:text-gray-100 transition-colors"
         >
           Cancelar y volver
         </button>

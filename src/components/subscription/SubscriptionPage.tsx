@@ -3,9 +3,8 @@ import { ArrowLeft, Crown, Check, CreditCard, Star, Shield, Zap, X, Store, Packa
 import { useStore } from '../../contexts/StoreContext';
 import { useToast } from '../../contexts/ToastContext';
 import { supabase } from '../../lib/supabase';
-import PaymentMethodForm from './PaymentMethodForm';
-import ActiveSubscription from './ActiveSubscription';
 import PaymentForm from '../payment/PaymentForm';
+import ActiveSubscription from './ActiveSubscription';
 
 export default function SubscriptionPage() {
   const { state, dispatch, getUserPlan } = useStore();
