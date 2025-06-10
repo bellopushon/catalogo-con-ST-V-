@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, ChevronDown, Crown } from 'lucide-react';
+import { Plan } from '../../contexts/StoreContext';
 
 export interface DateRange {
   start: Date;
@@ -10,7 +11,7 @@ export interface DateRange {
 interface DateRangeFilterProps {
   selectedRange: DateRange;
   onRangeChange: (range: DateRange) => void;
-  userPlan: string;
+  userPlan: Plan | null;
   disabled?: boolean;
 }
 
@@ -60,9 +61,11 @@ export default function DateRangeFilter({
   const [customEnd, setCustomEnd] = useState('');
 
   const dateRanges = getDateRanges();
-  const canUseAdvancedFilters = userPlan === 'emprendedor' || userPlan === 'profesional';
+  
+  // Determinar si el usuario puede usar filtros avanzados basado en su plan
+  const canUseAdvancedFilters = userPlan && userPlan.level >= 2;
 
-  // For free users, only show "Hoy"
+  // Para usuarios gratuitos, solo mostrar "Hoy"
   const availableRanges = canUseAdvancedFilters ? dateRanges : [dateRanges[0]];
 
   const handleCustomRangeSubmit = () => {

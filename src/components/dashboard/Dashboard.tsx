@@ -25,7 +25,7 @@ import StatsCard from './StatsCard';
 import DateRangeFilter, { DateRange } from './DateRangeFilter';
 
 export default function Dashboard() {
-  const { state } = useStore();
+  const { state, getUserPlan } = useStore();
   const { getVisits, getOrders, getOrderValue } = useAnalytics();
   const store = state.currentStore;
 
@@ -44,8 +44,11 @@ export default function Dashboard() {
 
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>(getDefaultDateRange());
 
-  const userPlan = state.user?.plan || 'gratuito';
-  const canUseAdvancedFilters = userPlan === 'emprendedor' || userPlan === 'profesional';
+  // Obtener plan actual del usuario
+  const userPlan = getUserPlan(state.user);
+  
+  // Determinar si el usuario puede usar filtros avanzados basado en su plan
+  const canUseAdvancedFilters = userPlan && userPlan.level >= 2;
 
   // Calculate analytics for current store (with fallbacks for no store)
   const analytics = useMemo(() => {
@@ -224,6 +227,7 @@ export default function Dashboard() {
               selectedRange={selectedDateRange}
               onRangeChange={setSelectedDateRange}
               userPlan={userPlan}
+              disabled={!canUseAdvancedFilters}
             />
           )}
         </div>
@@ -243,7 +247,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Plan Limitation Notice - Only show if store exists */}
+        {/* Plan Limitation Notice - Only show if store exists and user can't use advanced filters */}
         {store && !canUseAdvancedFilters && (
           <div className="mt-4 p-4 bg-amber-50 admin-dark:bg-amber-900/20 border border-amber-200 admin-dark:border-amber-700 rounded-lg">
             <div className="flex items-center gap-3">
