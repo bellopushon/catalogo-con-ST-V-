@@ -523,12 +523,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Obtener plan gratuito
   const getFreePlan = (): Plan | null => {
-    return state.plans.find(plan => plan.isFree && plan.isActive) || null;
+    const freePlan = state.plans.find(plan => plan.isFree && plan.isActive);
+    if (freePlan) {
+      return freePlan;
+    }
+    
+    // Si no hay plan gratuito, buscar el plan de nivel 1
+    const level1Plan = state.plans.find(plan => plan.level === 1 && plan.isActive);
+    return level1Plan || null;
   };
 
   // Obtener plan del usuario
   const getUserPlan = (user: User | null): Plan | null => {
     if (!user) return getFreePlan();
+    
+    // Si no hay planes cargados, devolver un plan por defecto
+    if (state.plans.length === 0) {
+      console.warn('⚠️ No plans loaded, returning default plan');
+      return {
+        id: 'gratuito',
+        name: 'Gratuito',
+        description: 'Plan gratuito',
+        price: 0,
+        maxStores: 1,
+        maxProducts: 10,
+        maxCategories: 3,
+        features: [],
+        isActive: true,
+        isFree: true,
+        level: 1,
+        createdAt: '',
+        updatedAt: ''
+      };
+    }
     
     // Buscar plan por ID
     const userPlan = state.plans.find(plan => plan.id === user.plan);
@@ -540,7 +567,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       plan => plan.name.toLowerCase() === user.plan.toLowerCase()
     );
     
-    return planByName || getFreePlan();
+    if (planByName) return planByName;
+    
+    // Si no se encuentra ningún plan, devolver el plan gratuito
+    const freePlan = getFreePlan();
+    
+    if (!freePlan) {
+      console.error('❌ No free plan found and user plan not found:', user.plan);
+    }
+    
+    return freePlan;
   };
 
   // Obtener plan por nivel
@@ -592,37 +628,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Función para cerrar sesión
   const logout = async (): Promise<void> => {
     try {
-      console.log('🔄 Starting logout process...');
       dispatch({ type: 'SET_LOADING', payload: true });
+      
+      console.log('🔄 Executing logout process...');
+      
+      // Limpiar localStorage manualmente para asegurar que se eliminen todos los tokens
+      localStorage.removeItem('sb-dpggztqltotvvfqmlvny-auth-token');
+      localStorage.removeItem('tutaviendo-auth-token');
       
       // Cerrar sesión en Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('❌ Supabase logout error:', error);
+        console.error('❌ Supabase signOut error:', error);
         throw error;
       }
-      
-      console.log('✅ Supabase signOut successful');
       
       // Limpiar estado local
       dispatch({ type: 'LOGOUT' });
       
-      // Limpiar cualquier dato de sesión en localStorage
-      localStorage.removeItem('tutaviendo-auth-token');
-      localStorage.removeItem('supabase.auth.token');
-      
-      console.log('✅ Local state cleared, logout complete');
-      
-      // Forzar redirección a login
-      window.location.href = '/login';
+      console.log('✅ Logout successful');
     } catch (error) {
       console.error('❌ Logout failed:', error);
       // Forzar logout local incluso si falla el logout remoto
       dispatch({ type: 'LOGOUT' });
-      
-      // Forzar redirección a login incluso si hay error
-      window.location.href = '/login';
-      
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -1138,6 +1166,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
 
             if (isMounted) {
+              // Si el usuario existe pero no tiene un plan asignado o tiene un plan inválido,
+              // asignarle el plan gratuito
+              if (userData) {
+                const freePlan = getFreePlan();
+                
+                // Verificar si el plan del usuario es válido
+                const userPlanIsValid = state.plans.some(p => p.id === userData.plan);
+                
+                if (!userData.plan || !userPlanIsValid) {
+                  console.log('⚠️ User has invalid plan, updating to free plan');
+                  
+                  if (freePlan) {
+                    // Actualizar el plan del usuario en la base de datos
+                    await supabase
+                      .from('users')
+                      .update({ plan: freePlan.id })
+                      .eq('id', session.user.id);
+                    
+                    // Actualizar el plan en userData para el estado local
+                    userData.plan = freePlan.id;
+                  }
+                }
+              }
+              
               const appUser = transformSupabaseUserToAppUser(session.user, userData);
               dispatch({ type: 'SET_USER', payload: appUser });
               dispatch({ type: 'SET_AUTHENTICATED', payload: true });
@@ -1381,6 +1433,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 oldStatus: state.user!.subscriptionStatus,
                 newStatus: userData.subscription_status
               });
+              
+              // Verificar si el plan del usuario es válido
+              const userPlanIsValid = state.plans.some(p => p.id === userData.plan);
+              
+              // Si el plan no es válido, asignar el plan gratuito
+              if (!userPlanIsValid) {
+                console.log('⚠️ User has invalid plan, updating to free plan');
+                
+                const freePlan = getFreePlan();
+                if (freePlan) {
+                  // Actualizar el plan del usuario en la base de datos
+                  await supabase
+                    .from('users')
+                    .update({ plan: freePlan.id })
+                    .eq('id', state.user!.id);
+                  
+                  // Actualizar el plan en userData para el estado local
+                  userData.plan = freePlan.id;
+                }
+              }
               
               // Actualizar usuario en el estado
               const updatedUser = transformSupabaseUserToAppUser(

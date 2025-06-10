@@ -14,6 +14,14 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { state, login, register } = useStore();
 
+  // Check if register parameter is in URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('register') === 'true') {
+      setIsRegister(true);
+    }
+  }, []);
+
   // Redirect if already authenticated
   useEffect(() => {
     if (state.isAuthenticated) {
@@ -62,7 +70,20 @@ export default function LoginPage() {
       // Navigation will be handled by the useEffect above
     } catch (error: any) {
       console.error('Auth error:', error);
-      setErrors({ general: error.message || 'Error de autenticación. Intenta de nuevo.' });
+      
+      // Provide more specific error messages
+      let errorMessage = error.message || 'Error de autenticación. Intenta de nuevo.';
+      
+      // Handle specific error cases
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = 'Credenciales inválidas. Verifica tu email y contraseña.';
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = 'Email no confirmado. Por favor revisa tu bandeja de entrada.';
+      } else if (error.message.includes('User already registered')) {
+        errorMessage = 'Este email ya está registrado. Intenta iniciar sesión.';
+      }
+      
+      setErrors({ general: errorMessage });
     } finally {
       setIsSubmitting(false);
     }
@@ -215,6 +236,15 @@ export default function LoginPage() {
                   setEmail('');
                   setPassword('');
                   setName('');
+                  
+                  // Update URL without reloading
+                  const url = new URL(window.location.href);
+                  if (isRegister) {
+                    url.searchParams.delete('register');
+                  } else {
+                    url.searchParams.set('register', 'true');
+                  }
+                  window.history.replaceState({}, '', url.toString());
                 }}
                 className="ml-2 text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
                 disabled={isSubmitting}

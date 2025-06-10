@@ -26,7 +26,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const [showStoreSelector, setShowStoreSelector] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { state, logout } = useStore();
+  const { state, logout, getUserPlan } = useStore();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const { success, error } = useToast();
   const navigate = useNavigate();
@@ -83,7 +83,7 @@ export default function UserDropdown({ onEditProfile }: UserDropdownProps) {
   const currentStore = state.currentStore;
   
   // Obtener plan del usuario usando la función del contexto
-  const userPlan = state.plans.find(p => p.id === user?.plan);
+  const userPlan = getUserPlan(user);
   
   // Determinar si el usuario tiene un plan premium
   const isPremiumUser = userPlan && !userPlan.isFree;
