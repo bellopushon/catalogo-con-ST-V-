@@ -10,25 +10,22 @@ interface PremiumModalProps {
 export default function PremiumModal({ onClose }: PremiumModalProps) {
   const { state, getUserPlan } = useStore();
   
-  // Obtener planes disponibles
-  const availablePlans = state.plans.filter(p => p.isActive && !p.isFree);
-  
   // Obtener plan actual del usuario
   const userPlan = getUserPlan(state.user);
   
-  // Determinar el siguiente plan recomendado
+  // Obtener el siguiente plan recomendado
   const getNextRecommendedPlan = () => {
-    if (!userPlan) return availablePlans[0];
+    if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
     
     // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
     if (!userPlan.isFree) {
       const nextLevel = userPlan.level + 1;
-      const nextPlan = availablePlans.find(p => p.level === nextLevel);
-      return nextPlan || availablePlans[availablePlans.length - 1]; // El último si no hay siguiente
+      const nextPlan = state.plans.find(p => p.level === nextLevel && p.isActive);
+      return nextPlan || state.plans.filter(p => !p.isFree && p.isActive).pop(); // El último si no hay siguiente
     }
     
     // Si es plan gratuito, recomendar el primer plan premium
-    return availablePlans[0];
+    return state.plans.find(p => !p.isFree && p.isActive);
   };
   
   const recommendedPlan = getNextRecommendedPlan();
@@ -37,12 +34,12 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
     {
       icon: Store,
       title: 'Múltiples Tiendas',
-      description: recommendedPlan ? `Crea hasta ${recommendedPlan.maxStores} tiendas diferentes con catálogos únicos` : 'Crea múltiples tiendas con catálogos únicos'
+      description: recommendedPlan ? `Crea hasta ${recommendedPlan.maxStores === 999999 ? '∞' : recommendedPlan.maxStores} tiendas diferentes con catálogos únicos` : 'Crea múltiples tiendas con catálogos únicos'
     },
     {
       icon: Package,
       title: 'Más Productos y Categorías',
-      description: recommendedPlan ? `Hasta ${recommendedPlan.maxProducts} productos por tienda` : 'Más productos por tienda'
+      description: recommendedPlan ? `Hasta ${recommendedPlan.maxProducts === 999999 ? '∞' : recommendedPlan.maxProducts} productos por tienda` : 'Más productos por tienda'
     },
     {
       icon: Palette,
@@ -85,24 +82,24 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           </div>
         </div>
 
-{/* Content */}
-<div className="p-6">
- {/* Current Limitation */}
- <div className="bg-orange-700 admin-dark:bg-orange-700 border border-orange-600 admin-dark:border-orange-600 rounded-lg p-4 mb-6">
-   <div className="flex items-center gap-3">
-     <div className="w-8 h-8 bg-orange-600 admin-dark:bg-orange-600 rounded-full flex items-center justify-center">
-       <Store className="w-4 h-4 text-white" />
-     </div>
-     <div>
-       <h3 className="font-semibold text-white">Has alcanzado el límite de tu plan {userPlan?.name || 'Gratuito'}</h3>
-       <p className="text-sm text-orange-100">
-         {userPlan ? 
-           `Actualmente tienes ${state.stores.length}/${userPlan.maxStores} tiendas. Actualiza para crear más.` :
-           'Actualiza para crear más tiendas.'}
-       </p>
-     </div>
-   </div>
- </div>
+        {/* Content */}
+        <div className="p-6">
+          {/* Current Limitation */}
+          <div className="bg-orange-50 admin-dark:bg-orange-900/20 border border-orange-200 admin-dark:border-orange-600 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-orange-100 admin-dark:bg-orange-600 rounded-full flex items-center justify-center">
+                <Store className="w-4 h-4 text-orange-600 admin-dark:text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-orange-800 admin-dark:text-orange-200">Has alcanzado el límite de tu plan {userPlan?.name || 'Gratuito'}</h3>
+                <p className="text-sm text-orange-700 admin-dark:text-orange-300">
+                  {userPlan ? 
+                    `Actualmente tienes ${state.stores.length}/${userPlan.maxStores} tiendas. Actualiza para crear más.` :
+                    'Actualiza para crear más tiendas.'}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Features List */}
           <div className="space-y-4 mb-8">
@@ -124,22 +121,24 @@ export default function PremiumModal({ onClose }: PremiumModalProps) {
           </div>
 
           {/* Pricing */}
-          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-xl p-6 mb-6">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
-                {recommendedPlan ? `Plan ${recommendedPlan.name}` : 'Plan Premium'}
-              </h3>
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <span className="text-4xl font-bold text-gray-900 admin-dark:text-white">
-                  ${recommendedPlan ? recommendedPlan.price.toFixed(2) : '9.99'}
-                </span>
-                <span className="text-gray-600 admin-dark:text-gray-300">/mes</span>
+          {recommendedPlan && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 rounded-xl p-6 mb-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
+                  Plan {recommendedPlan.name}
+                </h3>
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <span className="text-4xl font-bold text-gray-900 admin-dark:text-white">
+                    ${recommendedPlan.price.toFixed(2)}
+                  </span>
+                  <span className="text-gray-600 admin-dark:text-gray-300">/mes</span>
+                </div>
+                <p className="text-sm text-gray-600 admin-dark:text-gray-300">
+                  Facturación mensual • Cancela cuando quieras
+                </p>
               </div>
-              <p className="text-sm text-gray-600 admin-dark:text-gray-300">
-                Facturación mensual • Cancela cuando quieras
-              </p>
             </div>
-          </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4">

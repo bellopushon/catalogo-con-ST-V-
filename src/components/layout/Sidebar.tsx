@@ -146,7 +146,7 @@ export default function Sidebar() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-900 admin-dark:text-white">Cambiar Tienda</h3>
                   <span className="text-xs text-gray-500 admin-dark:text-gray-400 bg-gray-100 admin-dark:bg-gray-700 px-2 py-1 rounded-full">
-                    {state.stores.length} / {getMaxStores()}
+                    {state.stores.length} / {getMaxStores() === 999999 ? '∞' : getMaxStores()}
                   </span>
                 </div>
               </div>
@@ -226,7 +226,7 @@ export default function Sidebar() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 admin-dark:text-white">Mis Tiendas</h3>
               <span className="text-xs text-gray-500 admin-dark:text-gray-400 bg-gray-100 admin-dark:bg-gray-700 px-2 py-1 rounded-full">
-                {state.stores.length} / {getMaxStores()}
+                {state.stores.length} / {getMaxStores() === 999999 ? '∞' : getMaxStores()}
               </span>
             </div>
 

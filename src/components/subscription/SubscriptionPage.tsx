@@ -9,7 +9,7 @@ import ActiveSubscription from './ActiveSubscription';
 export default function SubscriptionPage() {
   const { state, dispatch, getUserPlan } = useStore();
   const { success, error } = useToast();
-  const [selectedPlan, setSelectedPlan] = useState('emprendedor');
+  const [selectedPlan, setSelectedPlan] = useState('');
   const [showPayment, setShowPayment] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] =  useState(true);
@@ -27,9 +27,29 @@ export default function SubscriptionPage() {
   // Actualizar los planes para marcar el plan actual
   useEffect(() => {
     if (plans.length > 0) {
+      // Establecer el plan seleccionado por defecto
+      if (!selectedPlan) {
+        // Si el usuario tiene un plan gratuito, seleccionar el primer plan premium
+        if (!isCurrentlyPremium) {
+          const firstPremiumPlan = plans.find(p => !p.isFree && p.isActive);
+          if (firstPremiumPlan) {
+            setSelectedPlan(firstPremiumPlan.id);
+          }
+        } else {
+          // Si ya tiene un plan premium, seleccionar el siguiente nivel
+          const nextLevel = userPlan ? userPlan.level + 1 : 2;
+          const nextPlan = plans.find(p => p.level === nextLevel && p.isActive);
+          if (nextPlan) {
+            setSelectedPlan(nextPlan.id);
+          } else {
+            // Si no hay siguiente nivel, seleccionar el plan actual
+            setSelectedPlan(currentPlan);
+          }
+        }
+      }
       setIsLoading(false);
     }
-  }, [plans]);
+  }, [plans, currentPlan, isCurrentlyPremium, userPlan, selectedPlan]);
 
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
@@ -267,12 +287,36 @@ export default function SubscriptionPage() {
     );
   }
 
-  if (showPayment) {
+  if (showPayment && selectedPlan) {
     const selectedPlanObj = plans.find(p => p.id === selectedPlan);
+    
+    if (!selectedPlanObj) {
+      return (
+        <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 admin-dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600 admin-dark:text-red-400" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white mb-2">
+              Plan no encontrado
+            </h2>
+            <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
+              No se pudo encontrar el plan seleccionado. Por favor intenta de nuevo.
+            </p>
+            <button
+              onClick={() => setShowPayment(false)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Volver a Planes
+            </button>
+          </div>
+        </div>
+      );
+    }
     
     return (
       <PaymentMethodForm
-        plan={selectedPlanObj!}
+        plan={selectedPlanObj}
         onBack={() => setShowPayment(false)}
         onSuccess={handlePaymentSuccess}
         isProcessing={isProcessing}

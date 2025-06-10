@@ -347,7 +347,7 @@ export default function AddStore() {
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-600 admin-dark:text-gray-300">Tiendas</p>
-                <p className="text-lg font-semibold text-gray-900 admin-dark:text-white">{state.stores.length} / {getMaxStores()}</p>
+                <p className="text-lg font-semibold text-gray-900 admin-dark:text-white">{state.stores.length} / {getMaxStores() === 999999 ? '∞' : getMaxStores()}</p>
               </div>
             </div>
           </div>

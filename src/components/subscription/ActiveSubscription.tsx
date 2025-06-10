@@ -13,8 +13,8 @@ export default function ActiveSubscription() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showPlanSelection, setShowPlanSelection] = useState(false); // Estado para mostrar selección de planes
-  const [selectedNewPlan, setSelectedNewPlan] = useState(''); // Plan seleccionado para reactivación
+  const [showPlanSelection, setShowPlanSelection] = useState(false);
+  const [selectedNewPlan, setSelectedNewPlan] = useState('');
   const [isCanceling, setIsCanceling] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -218,6 +218,12 @@ export default function ActiveSubscription() {
         throw new Error('No user found');
       }
       
+      // Find the professional plan
+      const proPlan = state.plans.find(p => p.level === 3 && p.isActive);
+      if (!proPlan) {
+        throw new Error('Professional plan not found');
+      }
+      
       // Calculate new subscription end date (30 days from now)
       const subscriptionEndDate = new Date();
       subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
@@ -226,7 +232,7 @@ export default function ActiveSubscription() {
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          plan: 'profesional',
+          plan: proPlan.id,
           subscription_status: 'active',
           subscription_start_date: new Date().toISOString(),
           subscription_end_date: subscriptionEndDate.toISOString(),
@@ -241,7 +247,7 @@ export default function ActiveSubscription() {
       // Update local state
       const updatedUser = {
         ...user!,
-        plan: 'profesional',
+        plan: proPlan.id,
         subscriptionStatus: 'active',
         subscriptionStartDate: new Date().toISOString(),
         subscriptionEndDate: subscriptionEndDate.toISOString(),
@@ -250,12 +256,8 @@ export default function ActiveSubscription() {
 
       dispatch({ type: 'SET_USER', payload: updatedUser });
       
-      // Obtener nombre del plan dinámicamente
-      const proPlan = state.plans.find(p => p.id === 'profesional');
-      const planName = proPlan?.name || 'Profesional';
-      
       success(
-        `¡Plan actualizado a ${planName}!`,
+        `¡Plan actualizado a ${proPlan.name}!`,
         'Ahora tienes acceso a todas las funciones premium.'
       );
       

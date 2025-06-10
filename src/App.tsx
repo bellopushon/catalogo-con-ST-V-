@@ -19,6 +19,7 @@ import StoreManager from './components/stores/StoreManager';
 import ProfilePage from './components/profile/ProfilePage';
 import SubscriptionPage from './components/subscription/SubscriptionPage';
 import PublicCatalog from './components/catalog/PublicCatalog';
+import PricingPage from './components/pricing/PricingPage';
 
 function LoadingScreen() {
   return (
@@ -80,7 +81,8 @@ function AppRoutes() {
                         location.pathname === '/subscription';
     
     const isPublicRoute = location.pathname.startsWith('/store/') || 
-                         location.pathname === '/login';
+                         location.pathname === '/login' ||
+                         location.pathname === '/pricing';
     
     // Force light mode for public routes
     if (isPublicRoute) {
@@ -113,6 +115,7 @@ function AppRoutes() {
     <Routes>
       {/* 🌍 PUBLIC ROUTES - Always accessible */}
       <Route path="/store/:slug" element={<PublicCatalog />} />
+      <Route path="/pricing" element={<PricingPage />} />
       
       {/* 🔐 LOGIN ROUTE */}
       <Route path="/login" element={
