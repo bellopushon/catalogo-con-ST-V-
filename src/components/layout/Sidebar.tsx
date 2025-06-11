@@ -154,7 +154,7 @@ export default function Sidebar() {
               {/* Store List */}
               <div className="max-h-60 overflow-y-auto p-2">
                 <div className="space-y-1">
-                  {state.stores.map(store => (
+                  {state.stores.filter(store => store.status === 'active').map(store => (
                     <button
                       key={store.id}
                       onClick={() => handleStoreChange(store)}

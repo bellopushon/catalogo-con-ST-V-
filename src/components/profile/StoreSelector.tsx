@@ -113,7 +113,7 @@ export default function StoreSelector({ onClose }: StoreSelectorProps) {
         </div>
 
         <div className="space-y-2 max-h-60 overflow-y-auto">
-          {state.stores.map(store => (
+          {state.stores.filter(store => store.status === 'active').map(store => (
             <button
               key={store.id}
               onClick={() => handleStoreChange(store)}

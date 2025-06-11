@@ -18,7 +18,7 @@ import AddStore from './components/premium/AddStore';
 import StoreManager from './components/stores/StoreManager';
 import ProfilePage from './components/profile/ProfilePage';
 import SubscriptionPage from './components/subscription/SubscriptionPage';
-import PublicCatalog from './components/catalog/PublicCatalog';
+import { PublicCatalog } from './components/catalog/PublicCatalog';
 import PricingPage from './components/pricing/PricingPage';
 import PaymentStatus from './components/payment/PaymentStatus';
 
@@ -108,8 +108,12 @@ function AppRoutes() {
     }
   }, [location.pathname, isDarkMode]);
 
-  // 🔥 CRITICAL: Show loading screen while initializing
-  if (!state.isInitialized) {
+  // 🔥 CRITICAL: Show loading screen only for protected routes
+  const isProtectedRoute = location.pathname.startsWith('/admin') || 
+                          location.pathname === '/profile' || 
+                          location.pathname === '/subscription';
+
+  if (isProtectedRoute && !state.isInitialized) {
     return <LoadingScreen />;
   }
 
@@ -122,7 +126,7 @@ function AppRoutes() {
       {/* 🔐 LOGIN ROUTE */}
       <Route path="/login" element={
         state.isAuthenticated ? (
-          <Navigate to="/admin\" replace />
+          <Navigate to="/admin" replace />
         ) : (
           <LoginPage />
         )

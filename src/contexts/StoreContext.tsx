@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, Dispatch, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { useLocation } from 'react-router-dom';
 
 // Definición de tipos
 export interface User {
@@ -26,6 +27,7 @@ export interface Category {
   id: string;
   storeId: string;
   name: string;
+  is_active: boolean;
   createdAt: string;
 }
 
@@ -76,6 +78,7 @@ export interface Store {
   messageClosing: string;
   includePhoneInMessage: boolean;
   includeCommentsInMessage: boolean;
+  status: 'active' | 'suspended' | 'archived';
   createdAt: string;
   updatedAt: string;
   // Relaciones
@@ -142,7 +145,8 @@ type ActionType =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'SET_AUTH_ERROR'; payload: string | null }
-  | { type: 'LOGOUT' };
+  | { type: 'LOGOUT' }
+  | { type: 'REACTIVATE_STORE'; payload: string };
 
 // Reducer
 function storeReducer(state: StoreState, action: ActionType): StoreState {
@@ -287,6 +291,19 @@ function storeReducer(state: StoreState, action: ActionType): StoreState {
         isInitialized: true,
         isLoading: false
       };
+    case 'REACTIVATE_STORE':
+      const reactivatedStores = state.stores.map(store =>
+        store.id === action.payload
+          ? { ...store, status: 'active' as 'active' }
+          : store
+      );
+      return {
+        ...state,
+        stores: reactivatedStores,
+        currentStore: state.currentStore?.id === action.payload
+          ? { ...state.currentStore, status: 'active' as 'active' }
+          : state.currentStore
+      };
     default:
       return state;
   }
@@ -309,7 +326,7 @@ const StoreContext = createContext<{
   deleteProduct: (productId: string) => Promise<void>;
   // Funciones para planes
   loadPlans: () => Promise<void>;
-  getFreePlan: () => Plan |  null;
+  getFreePlan: () => Plan | null;
   getUserPlan: (user: User | null) => Plan | null;
   getPlanByLevel: (level: number) => Plan | null;
   getMaxLimitForUser: (user: User | null, type: 'stores' | 'products' | 'categories') => number;
@@ -317,6 +334,11 @@ const StoreContext = createContext<{
   getMaxStores: () => number;
   getMaxProducts: () => number;
   getMaxCategories: () => number;
+  // NUEVO: Exponer si el usuario excede el límite de tiendas activas
+  hasStoreLimitExceeded: boolean;
+  // NUEVO: Función para suspender tiendas
+  suspendStores: (storeIds: string[]) => Promise<void>;
+  reactivateStore: (storeId: string) => Promise<void>;
 }>({
   state: initialState,
   dispatch: () => null,
@@ -341,6 +363,9 @@ const StoreContext = createContext<{
   getMaxStores: () => 1,
   getMaxProducts: () => 10,
   getMaxCategories: () => 3,
+  hasStoreLimitExceeded: false,
+  suspendStores: async () => {},
+  reactivateStore: async () => {},
 });
 
 // Funciones auxiliares de transformación
@@ -391,36 +416,37 @@ function transformSupabaseStoreToAppStore(storeData: any, categories: Category[]
     userId: storeData.user_id,
     name: storeData.name,
     slug: storeData.slug,
-    description: storeData.description || undefined,
-    logo: storeData.logo || undefined,
-    whatsapp: storeData.whatsapp || undefined,
-    currency: storeData.currency || 'USD',
-    headingFont: storeData.heading_font || 'Inter',
-    bodyFont: storeData.body_font || 'Inter',
-    colorPalette: storeData.color_palette || 'predeterminado',
-    borderRadius: storeData.border_radius || 8,
-    productsPerPage: storeData.products_per_page || 12,
-    facebookUrl: storeData.facebook_url || undefined,
-    instagramUrl: storeData.instagram_url || undefined,
-    tiktokUrl: storeData.tiktok_url || undefined,
-    twitterUrl: storeData.twitter_url || undefined,
+    description: storeData.description,
+    logo: storeData.logo,
+    whatsapp: storeData.whatsapp,
+    currency: storeData.currency,
+    headingFont: storeData.heading_font,
+    bodyFont: storeData.body_font,
+    colorPalette: storeData.color_palette,
+    borderRadius: storeData.border_radius,
+    productsPerPage: storeData.products_per_page,
+    facebookUrl: storeData.facebook_url,
+    instagramUrl: storeData.instagram_url,
+    tiktokUrl: storeData.tiktok_url,
+    twitterUrl: storeData.twitter_url,
     showSocialInCatalog: storeData.show_social_in_catalog ?? true,
     acceptCash: storeData.accept_cash ?? true,
-    acceptBankTransfer: storeData.accept_bank_transfer ?? false,
-    bankDetails: storeData.bank_details || undefined,
+    acceptBankTransfer: storeData.accept_bank_transfer ?? true,
+    bankDetails: storeData.bank_details,
     allowPickup: storeData.allow_pickup ?? true,
-    allowDelivery: storeData.allow_delivery ?? false,
-    deliveryCost: storeData.delivery_cost || 0,
-    deliveryZone: storeData.delivery_zone || undefined,
-    messageGreeting: storeData.message_greeting || '¡Hola {storeName}!',
-    messageIntroduction: storeData.message_introduction || 'Soy {customerName}.\nMe gustaría hacer el siguiente pedido:',
-    messageClosing: storeData.message_closing || '¡Muchas gracias!',
+    allowDelivery: storeData.allow_delivery ?? true,
+    deliveryCost: storeData.delivery_cost ?? 0,
+    deliveryZone: storeData.delivery_zone,
+    messageGreeting: storeData.message_greeting,
+    messageIntroduction: storeData.message_introduction,
+    messageClosing: storeData.message_closing,
     includePhoneInMessage: storeData.include_phone_in_message ?? true,
     includeCommentsInMessage: storeData.include_comments_in_message ?? true,
+    status: storeData.status || 'active',
     createdAt: storeData.created_at,
     updatedAt: storeData.updated_at,
     categories,
-    products,
+    products
   };
 }
 
@@ -429,6 +455,7 @@ function transformSupabaseCategoryToAppCategory(categoryData: any): Category {
     id: categoryData.id,
     storeId: categoryData.store_id,
     name: categoryData.name,
+    is_active: categoryData.is_active ?? true,
     createdAt: categoryData.created_at,
   };
 }
@@ -452,46 +479,250 @@ function transformSupabaseProductToAppProduct(productData: any): Product {
 }
 
 function transformAppStoreToSupabaseUpdate(storeData: Partial<Store>) {
-  const supabaseData: any = {};
+  const update: any = {};
   
-  if (storeData.name !== undefined) supabaseData.name = storeData.name;
-  if (storeData.slug !== undefined) supabaseData.slug = storeData.slug;
-  if (storeData.description !== undefined) supabaseData.description = storeData.description;
-  if (storeData.logo !== undefined) supabaseData.logo = storeData.logo;
-  if (storeData.whatsapp !== undefined) supabaseData.whatsapp = storeData.whatsapp;
-  if (storeData.currency !== undefined) supabaseData.currency = storeData.currency;
-  if (storeData.headingFont !== undefined) supabaseData.heading_font = storeData.headingFont;
-  if (storeData.bodyFont !== undefined) supabaseData.body_font = storeData.bodyFont;
-  if (storeData.colorPalette !== undefined) supabaseData.color_palette = storeData.colorPalette;
-  if (storeData.borderRadius !== undefined) supabaseData.border_radius = storeData.borderRadius;
-  if (storeData.productsPerPage !== undefined) supabaseData.products_per_page = storeData.productsPerPage;
-  if (storeData.facebookUrl !== undefined) supabaseData.facebook_url = storeData.facebookUrl;
-  if (storeData.instagramUrl !== undefined) supabaseData.instagram_url = storeData.instagramUrl;
-  if (storeData.tiktokUrl !== undefined) supabaseData.tiktok_url = storeData.tiktokUrl;
-  if (storeData.twitterUrl !== undefined) supabaseData.twitter_url = storeData.twitterUrl;
-  if (storeData.showSocialInCatalog !== undefined) supabaseData.show_social_in_catalog = storeData.showSocialInCatalog;
-  if (storeData.acceptCash !== undefined) supabaseData.accept_cash = storeData.acceptCash;
-  if (storeData.acceptBankTransfer !== undefined) supabaseData.accept_bank_transfer = storeData.acceptBankTransfer;
-  if (storeData.bankDetails !== undefined) supabaseData.bank_details = storeData.bankDetails;
-  if (storeData.allowPickup !== undefined) supabaseData.allow_pickup = storeData.allowPickup;
-  if (storeData.allowDelivery !== undefined) supabaseData.allow_delivery = storeData.allowDelivery;
-  if (storeData.deliveryCost !== undefined) supabaseData.delivery_cost = storeData.deliveryCost;
-  if (storeData.deliveryZone !== undefined) supabaseData.delivery_zone = storeData.deliveryZone;
-  if (storeData.messageGreeting !== undefined) supabaseData.message_greeting = storeData.messageGreeting;
-  if (storeData.messageIntroduction !== undefined) supabaseData.message_introduction = storeData.messageIntroduction;
-  if (storeData.messageClosing !== undefined) supabaseData.message_closing = storeData.messageClosing;
-  if (storeData.includePhoneInMessage !== undefined) supabaseData.include_phone_in_message = storeData.includePhoneInMessage;
-  if (storeData.includeCommentsInMessage !== undefined) supabaseData.include_comments_in_message = storeData.includeCommentsInMessage;
+  if (storeData.name !== undefined) update.name = storeData.name;
+  if (storeData.slug !== undefined) update.slug = storeData.slug;
+  if (storeData.description !== undefined) update.description = storeData.description;
+  if (storeData.logo !== undefined) update.logo = storeData.logo;
+  if (storeData.whatsapp !== undefined) update.whatsapp = storeData.whatsapp;
+  if (storeData.currency !== undefined) update.currency = storeData.currency;
+  if (storeData.headingFont !== undefined) update.heading_font = storeData.headingFont;
+  if (storeData.bodyFont !== undefined) update.body_font = storeData.bodyFont;
+  if (storeData.colorPalette !== undefined) update.color_palette = storeData.colorPalette;
+  if (storeData.borderRadius !== undefined) update.border_radius = storeData.borderRadius;
+  if (storeData.productsPerPage !== undefined) update.products_per_page = storeData.productsPerPage;
+  if (storeData.facebookUrl !== undefined) update.facebook_url = storeData.facebookUrl;
+  if (storeData.instagramUrl !== undefined) update.instagram_url = storeData.instagramUrl;
+  if (storeData.tiktokUrl !== undefined) update.tiktok_url = storeData.tiktokUrl;
+  if (storeData.twitterUrl !== undefined) update.twitter_url = storeData.twitterUrl;
+  if (storeData.showSocialInCatalog !== undefined) update.show_social_in_catalog = storeData.showSocialInCatalog;
+  if (storeData.acceptCash !== undefined) update.accept_cash = storeData.acceptCash;
+  if (storeData.acceptBankTransfer !== undefined) update.accept_bank_transfer = storeData.acceptBankTransfer;
+  if (storeData.bankDetails !== undefined) update.bank_details = storeData.bankDetails;
+  if (storeData.allowPickup !== undefined) update.allow_pickup = storeData.allowPickup;
+  if (storeData.allowDelivery !== undefined) update.allow_delivery = storeData.allowDelivery;
+  if (storeData.deliveryCost !== undefined) update.delivery_cost = storeData.deliveryCost;
+  if (storeData.deliveryZone !== undefined) update.delivery_zone = storeData.deliveryZone;
+  if (storeData.messageGreeting !== undefined) update.message_greeting = storeData.messageGreeting;
+  if (storeData.messageIntroduction !== undefined) update.message_introduction = storeData.messageIntroduction;
+  if (storeData.messageClosing !== undefined) update.message_closing = storeData.messageClosing;
+  if (storeData.includePhoneInMessage !== undefined) update.include_phone_in_message = storeData.includePhoneInMessage;
+  if (storeData.includeCommentsInMessage !== undefined) update.include_comments_in_message = storeData.includeCommentsInMessage;
+  if (storeData.status !== undefined) update.status = storeData.status;
   
-  // Always update the updated_at timestamp
-  supabaseData.updated_at = new Date().toISOString();
-  
-  return supabaseData;
+  return update;
+}
+
+// --- Lógica de desactivación automática de productos excedentes ---
+async function enforceProductLimitsOnStore(store: Store, user: User, userPlan: Plan): Promise<void> {
+  const maxProducts = userPlan.maxProducts;
+  const activeProducts = store.products.filter(p => p.isActive);
+  if (activeProducts.length > maxProducts) {
+    // Ordenar por fecha de creación (más antiguos primero)
+    const productsToKeep = activeProducts.slice(0, maxProducts);
+    const productsToDeactivate = activeProducts.slice(maxProducts);
+    for (const product of productsToDeactivate) {
+      await supabase
+        .from('products')
+        .update({ is_active: false })
+        .eq('id', product.id);
+    }
+  }
+}
+
+// --- Lógica de reactivación controlada ---
+async function tryReactivateProduct(productId: string, store: Store, user: User, userPlan: Plan): Promise<boolean> {
+  const maxProducts = userPlan.maxProducts;
+  const activeProducts = store.products.filter(p => p.isActive);
+  if (activeProducts.length >= maxProducts) {
+    // No permitir reactivar
+    return false;
+  }
+  // Reactivar en Supabase
+  await supabase
+    .from('products')
+    .update({ is_active: true })
+    .eq('id', productId);
+  return true;
+}
+
+// --- Hook para aplicar la lógica al cargar tiendas o cambiar de plan ---
+async function enforceLimitsOnAllStores(stores: Store[], user: User, userPlan: Plan) {
+  for (const store of stores) {
+    await enforceProductLimitsOnStore(store, user, userPlan);
+  }
 }
 
 // Proveedor de contexto
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(storeReducer, initialState);
+  const location = useLocation();
+
+  // Inicialización de autenticación solo para rutas protegidas
+  useEffect(() => {
+    let isMounted = true;
+
+    const isProtectedRoute = location.pathname.startsWith('/admin') || 
+                            location.pathname === '/profile' || 
+                            location.pathname === '/subscription';
+
+    // Si no es una ruta protegida, marcar como inicializado y salir
+    if (!isProtectedRoute) {
+      dispatch({ type: 'SET_INITIALIZED', payload: true });
+      return;
+    }
+
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 Initializing authentication...');
+        
+        // Obtener la sesión actual de Supabase primero
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError);
+          if (isMounted) {
+            dispatch({ type: 'SET_AUTH_ERROR', payload: sessionError.message });
+            dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+            dispatch({ type: 'SET_INITIALIZED', payload: true });
+          }
+          return;
+        }
+
+        // Cargar planes primero, independientemente de si hay sesión o no
+        try {
+          await loadPlans();
+        } catch (error) {
+          console.error('❌ Error loading plans:', error);
+          // No fallar la inicialización por esto, continuar con el proceso
+        }
+
+        // Si hay una sesión activa, cargar datos del usuario
+        if (session?.user) {
+          console.log('✅ User found in session:', session.user.id);
+          
+          try {
+            // Obtener datos del usuario
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            if (userError) {
+              console.error('❌ Error fetching user data:', userError);
+            }
+
+            if (isMounted) {
+              // Si el usuario existe pero no tiene un plan asignado o tiene un plan inválido,
+              // asignarle el plan gratuito
+              if (userData) {
+                const freePlan = getFreePlan();
+                
+                // Verificar si el plan del usuario es válido
+                const userPlanIsValid = state.plans.some(p => p.id === userData.plan);
+                
+                if (!userData.plan || !userPlanIsValid) {
+                  console.log('⚠️ User has invalid plan, updating to free plan');
+                  
+                  if (freePlan) {
+                    // Actualizar el plan del usuario en la base de datos
+                    await supabase
+                      .from('users')
+                      .update({ plan: freePlan.id })
+                      .eq('id', session.user.id);
+                    
+                    // Actualizar el plan en userData para el estado local
+                    userData.plan = freePlan.id;
+                  }
+                }
+              }
+              
+              const appUser = transformSupabaseUserToAppUser(session.user, userData || {});
+              if (appUser) {
+                dispatch({ type: 'SET_USER', payload: appUser });
+                dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+
+                // Cargar tiendas del usuario
+                try {
+                  await loadUserStores(session.user.id);
+                } catch (error) {
+                  console.error('❌ Error loading stores:', error);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error during initialization:', error);
+            if (isMounted && session?.user) {
+              const appUser = transformSupabaseUserToAppUser(session.user, {});
+              if (appUser) {
+                dispatch({ type: 'SET_USER', payload: appUser });
+                dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+              }
+            }
+          }
+        } else {
+          console.log('ℹ️ No user session found');
+          if (isMounted) {
+            dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+          }
+        }
+      } catch (error: any) {
+        console.error('❌ Auth initialization failed:', error);
+        if (isMounted) {
+          dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
+          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
+        }
+      } finally {
+        // SIEMPRE marcar como inicializado al final
+        if (isMounted) {
+          dispatch({ type: 'SET_INITIALIZED', payload: true });
+          console.log('✅ Authentication initialization complete');
+        }
+      }
+    };
+
+    // Inicializar autenticación
+    initializeAuth();
+
+    // Escuchar cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      
+      console.log('🔄 Auth state changed:', event);
+      
+      // Solo manejar los eventos relevantes
+      if (event === 'SIGNED_OUT') {
+        dispatch({ type: 'LOGOUT' });
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // Solo actualizar si es un nuevo login, no en el inicial
+        if (state.isInitialized) {
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            const appUser = transformSupabaseUserToAppUser(session.user, userData);
+            dispatch({ type: 'SET_USER', payload: appUser });
+            dispatch({ type: 'SET_AUTHENTICATED', payload: true });
+
+            await loadPlans();
+            await loadUserStores(session.user.id);
+          } catch (error) {
+            console.error('❌ Error handling auth state change:', error);
+          }
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [location.pathname]);
 
   // Función para cargar planes desde la base de datos
   const loadPlans = async (): Promise<void> => {
@@ -523,14 +754,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Obtener plan gratuito
   const getFreePlan = (): Plan | null => {
-    const freePlan = state.plans.find(plan => plan.isFree && plan.isActive);
-    if (freePlan) {
-      return freePlan;
+    if (!state.plans || state.plans.length === 0) {
+      console.warn('⚠️ No hay planes disponibles');
+      return null;
     }
     
-    // Si no hay plan gratuito, buscar el plan de nivel 1
-    const level1Plan = state.plans.find(plan => plan.level === 1 && plan.isActive);
-    return level1Plan || null;
+    const freePlan = state.plans.find(plan => plan.isFree && plan.isActive);
+    if (!freePlan) {
+      console.warn('⚠️ No se encontró un plan gratuito');
+      return null;
+    }
+    
+    return freePlan;
   };
 
   // Obtener plan del usuario
@@ -846,10 +1081,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Función para eliminar categoría
   const deleteCategory = async (categoryId: string): Promise<void> => {
-    if (!state.user) {
-      throw new Error('Usuario no autenticado');
+    if (!state.user || !state.currentStore) {
+      throw new Error('No hay usuario o tienda seleccionada');
     }
 
+    // Reasignar productos a null (sin categoría)
+    await supabase
+      .from('products')
+      .update({ category_id: null })
+      .eq('store_id', state.currentStore.id)
+      .eq('category_id', categoryId);
+
+    // Eliminar la categoría
     const { error } = await supabase
       .from('categories')
       .delete()
@@ -921,6 +1164,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       throw new Error('Usuario no autenticado');
     }
 
+    // Lógica para evitar activar productos si se supera el límite
+    if (productData.isActive) {
+      // Buscar la tienda actual
+      const store = state.currentStore;
+      if (store) {
+        const userPlan = getUserPlan(state.user);
+        const maxProducts = userPlan?.maxProducts || 10;
+        const activeProducts = store.products.filter(p => p.isActive && p.id !== productData.id);
+        if (activeProducts.length >= maxProducts) {
+          throw new Error(`No puedes activar más productos. Has alcanzado el límite de ${maxProducts} productos activos para tu plan. Elimina o desactiva otro producto para poder activar este.`);
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from('products')
       .update({
@@ -940,7 +1197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       console.error('Error updating product:', error);
-      throw new Error('No se pudo actualizar el producto. Intenta de nuevo.');
+      throw new Error(error.message || 'No se pudo actualizar el producto. Intenta de nuevo.');
     }
 
     const updatedProduct = transformSupabaseProductToAppProduct(data);
@@ -1085,6 +1342,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Lógica de suspensión automática según el plan
+      const user = state.user;
+      if (user) {
+        const maxStores = getMaxLimitForUser(user, 'stores');
+        // Filtrar tiendas activas
+        const activeStores = storesData.filter(store => store.status === 'active');
+        if (activeStores.length > maxStores) {
+          // Ordenar por fecha de creación (más antiguas primero)
+          const storesToSuspend = activeStores.slice(0, activeStores.length - maxStores);
+          const suspendIds = storesToSuspend.map(store => store.id);
+          // Actualizar en Supabase
+          if (suspendIds.length > 0) {
+            await supabase
+              .from('stores')
+              .update({ status: 'suspended' })
+              .in('id', suspendIds);
+            // Reflejar el cambio localmente
+            storesData.forEach(store => {
+              if (suspendIds.includes(store.id)) {
+                store.status = 'suspended';
+              }
+            });
+          }
+        }
+      }
+
       // Cargar categorías para todas las tiendas
       const storeIds = storesData.map(store => store.id);
       const { data: categoriesData } = await supabase
@@ -1119,159 +1402,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (stores.length > 0) {
         dispatch({ type: 'SET_CURRENT_STORE', payload: stores[0] });
       }
+
+      // Aplicar lógica de desactivación automática de productos excedentes
+      if (user) {
+        const userPlan = getUserPlan(user);
+        if (userPlan) {
+          await enforceLimitsOnAllStores(stores, user, userPlan);
+        }
+      }
     } catch (error) {
       console.error('Error loading user stores:', error);
     }
   };
-
-  // Inicialización de autenticación
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        console.log('🔄 Initializing authentication...');
-        
-        // Cargar planes primero
-        await loadPlans();
-        
-        // Obtener la sesión actual de Supabase
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error('❌ Session error:', sessionError);
-          if (isMounted) {
-            dispatch({ type: 'SET_AUTH_ERROR', payload: sessionError.message });
-            dispatch({ type: 'SET_AUTHENTICATED', payload: false });
-            dispatch({ type: 'SET_INITIALIZED', payload: true });
-          }
-          return;
-        }
-
-        if (session?.user) {
-          console.log('✅ User found in session:', session.user.id);
-          
-          try {
-            // Obtener datos del usuario
-            const { data: userData, error: userError } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-
-            if (userError) {
-              console.error('❌ Error fetching user data:', userError);
-              // No cerrar sesión aquí, solo loguear el error
-              // El usuario podría no tener registro en la tabla users todavía
-            }
-
-            if (isMounted) {
-              // Si el usuario existe pero no tiene un plan asignado o tiene un plan inválido,
-              // asignarle el plan gratuito
-              if (userData) {
-                const freePlan = getFreePlan();
-                
-                // Verificar si el plan del usuario es válido
-                const userPlanIsValid = state.plans.some(p => p.id === userData.plan);
-                
-                if (!userData.plan || !userPlanIsValid) {
-                  console.log('⚠️ User has invalid plan, updating to free plan');
-                  
-                  if (freePlan) {
-                    // Actualizar el plan del usuario en la base de datos
-                    await supabase
-                      .from('users')
-                      .update({ plan: freePlan.id })
-                      .eq('id', session.user.id);
-                    
-                    // Actualizar el plan en userData para el estado local
-                    userData.plan = freePlan.id;
-                  }
-                }
-              }
-              
-              const appUser = transformSupabaseUserToAppUser(session.user, userData);
-              dispatch({ type: 'SET_USER', payload: appUser });
-              dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-
-              // Cargar tiendas del usuario
-              try {
-                await loadUserStores(session.user.id);
-              } catch (error) {
-                console.error('❌ Error loading stores:', error);
-                // No fallar la autenticación por esto
-              }
-            }
-          } catch (error) {
-            console.error('❌ Error during initialization:', error);
-            // Aún así marcar como autenticado si tenemos sesión
-            if (isMounted && session?.user) {
-              const appUser = transformSupabaseUserToAppUser(session.user, {});
-              dispatch({ type: 'SET_USER', payload: appUser });
-              dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-            }
-          }
-        } else {
-          console.log('ℹ️ No user session found');
-          if (isMounted) {
-            dispatch({ type: 'SET_AUTHENTICATED', payload: false });
-          }
-        }
-      } catch (error: any) {
-        console.error('❌ Auth initialization failed:', error);
-        if (isMounted) {
-          dispatch({ type: 'SET_AUTH_ERROR', payload: error.message });
-          dispatch({ type: 'SET_AUTHENTICATED', payload: false });
-        }
-      } finally {
-        // SIEMPRE marcar como inicializado al final
-        if (isMounted) {
-          dispatch({ type: 'SET_INITIALIZED', payload: true });
-          console.log('✅ Authentication initialization complete');
-        }
-      }
-    };
-
-    // Inicializar autenticación
-    initializeAuth();
-
-    // Escuchar cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      
-      console.log('🔄 Auth state changed:', event);
-      
-      // Solo manejar los eventos relevantes
-      if (event === 'SIGNED_OUT') {
-        dispatch({ type: 'LOGOUT' });
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        // Solo actualizar si es un nuevo login, no en el inicial
-        if (state.isInitialized) {
-          try {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-
-            const appUser = transformSupabaseUserToAppUser(session.user, userData);
-            dispatch({ type: 'SET_USER', payload: appUser });
-            dispatch({ type: 'SET_AUTHENTICATED', payload: true });
-
-            await loadPlans();
-            await loadUserStores(session.user.id);
-          } catch (error) {
-            console.error('❌ Error handling auth state change:', error);
-          }
-        }
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []); // Empty dependency array
 
   // Listener para cambios de plan desde superadministrador
   useEffect(() => {
@@ -1296,8 +1438,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             console.log(`📈 Plan changed from ${oldUserData.plan} to ${newUserData.plan}`);
             
             // Actualizar usuario en el estado
+            const user = state.user;
+            if (!user) {
+              console.error('❌ No user found in state');
+              return;
+            }
+            
             const updatedUser = transformSupabaseUserToAppUser(
-              { id: state.user.id, email: state.user.email }, 
+              { id: user.id, email: user.email }, 
               newUserData
             );
             
@@ -1305,7 +1453,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             
             // Recargar tiendas para aplicar nuevos límites
             try {
-              await loadUserStores(state.user.id);
+              await loadUserStores(user.id);
               console.log('✅ Stores reloaded with new plan limits');
             } catch (error) {
               console.error('❌ Error reloading stores:', error);
@@ -1486,6 +1634,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state.user?.id, state.isInitialized]);
   
+  // NUEVO: Saber si el usuario excede el límite de tiendas activas
+  const hasStoreLimitExceeded = React.useMemo(() => {
+    if (!state.user) return false;
+    const maxStores = getMaxLimitForUser(state.user, 'stores');
+    const activeStores = state.stores.filter(store => store.status === 'active');
+    return activeStores.length > maxStores;
+  }, [state.user, state.stores]);
+
+  // NUEVO: Función para suspender tiendas por id
+  const suspendStores = async (storeIds: string[]) => {
+    if (!state.user) return;
+    if (!storeIds.length) return;
+    await supabase
+      .from('stores')
+      .update({ status: 'suspended' as 'suspended' })
+      .in('id', storeIds);
+    // Actualizar estado local
+    const updatedStores = state.stores.map(store =>
+      storeIds.includes(store.id) ? { ...store, status: 'suspended' as 'suspended' } : store
+    );
+    dispatch({ type: 'SET_STORES', payload: updatedStores });
+  };
+
+  // Función para reactivar una tienda
+  const reactivateStore = async (storeId: string): Promise<void> => {
+    const user = state.user;
+    if (!user) {
+      throw new Error('Usuario no autenticado');
+    }
+
+    // Verificar si reactivar esta tienda excedería el límite
+    const maxStores = getMaxLimitForUser(user, 'stores');
+    const activeStores = state.stores.filter(store => 
+      store.status === 'active' && store.id !== storeId
+    );
+
+    if (activeStores.length >= maxStores) {
+      throw new Error(`No puedes reactivar esta tienda porque excederías el límite de ${maxStores} tiendas activas de tu plan.`);
+    }
+
+    // Actualizar en Supabase
+    const { error } = await supabase
+      .from('stores')
+      .update({ status: 'active' })
+      .eq('id', storeId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error reactivating store:', error);
+      throw new Error('No se pudo reactivar la tienda. Intenta de nuevo.');
+    }
+
+    // Actualizar estado local
+    dispatch({ type: 'REACTIVATE_STORE', payload: storeId });
+  };
+
   return (
     <StoreContext.Provider value={{ 
       state, 
@@ -1510,7 +1714,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       canCreateStore,
       getMaxStores,
       getMaxProducts,
-      getMaxCategories
+      getMaxCategories,
+      hasStoreLimitExceeded,
+      suspendStores,
+      reactivateStore
     }}>
       {children}
     </StoreContext.Provider>

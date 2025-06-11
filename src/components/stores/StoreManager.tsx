@@ -13,9 +13,10 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { useToast } from '../../contexts/ToastContext';
+import { supabase } from '../../lib/supabase';
 
 export default function StoreManager() {
-  const { state, dispatch, getUserPlan } = useStore();
+  const { state, dispatch, getUserPlan, reactivateStore, suspendStores, getMaxStores } = useStore();
   const { success, error } = useToast();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [storeToDelete, setStoreToDelete] = useState<any>(null);
@@ -34,9 +35,8 @@ export default function StoreManager() {
   };
 
   // Obtener el máximo de tiendas permitidas según el plan
-  const getMaxStores = () => {
-    return userPlan?.maxStores || 1;
-  };
+  // (ya está arriba, pero lo dejamos para claridad)
+  // const getMaxStores = () => userPlan?.maxStores || 1;
 
   const handleDeleteStore = async (store: any) => {
     setStoreToDelete(store);
@@ -46,29 +46,34 @@ export default function StoreManager() {
 
   const confirmDeleteStore = async () => {
     if (!storeToDelete) return;
-
     setIsDeleting(true);
-
     try {
-      // Check if this is the last store and user is on a paid plan
-      if ((state.stores?.length === 1) && userPlan && !userPlan.isFree) {
-        error(
-          'No puedes eliminar tu única tienda',
-          'Los usuarios con plan de pago deben tener al menos una tienda activa.'
-        );
-        setIsDeleting(false);
-        setShowDeleteModal(false);
-        return;
-      }
+      // Eliminar en Supabase
+      const { error: deleteError } = await supabase
+        .from('stores')
+        .delete()
+        .eq('id', storeToDelete.id);
+      if (deleteError) throw deleteError;
 
-      // Delete the store
+      // Eliminar en estado local
       dispatch({ type: 'DELETE_STORE', payload: storeToDelete.id });
 
-      success(
-        'Tienda eliminada',
-        `La tienda "${storeToDelete.name}" ha sido eliminada correctamente.`
-      );
-
+      // Si la tienda eliminada era la activa
+      if (state.currentStore?.id === storeToDelete.id) {
+        // Buscar una tienda suspendida
+        const suspended = state.stores.find(s => s.status === 'suspended' && s.id !== storeToDelete.id);
+        if (suspended) {
+          // Reactivar en Supabase
+          await supabase.from('stores').update({ status: 'active' }).eq('id', suspended.id);
+          // Actualizar estado local
+          await reactivateStore(suspended.id);
+          dispatch({ type: 'SET_CURRENT_STORE', payload: suspended });
+          success('Tienda reactivada', `La tienda "${suspended.name}" ha sido reactivada automáticamente.`);
+        } else {
+          dispatch({ type: 'SET_CURRENT_STORE', payload: null });
+        }
+      }
+      success('Tienda eliminada', `La tienda "${storeToDelete.name}" ha sido eliminada correctamente.`);
       setShowDeleteModal(false);
       setStoreToDelete(null);
     } catch (err) {
@@ -92,6 +97,12 @@ export default function StoreManager() {
 
   return (
     <div className="space-y-4 lg:space-y-6">
+      {/* Aviso de suscripción cancelada o downgrade */}
+      {state.user?.subscriptionStatus === 'canceled' && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-4 rounded">
+          <strong>¡Atención!</strong> Has cancelado tu suscripción. Tus tiendas estarán activas hasta el <b>{state.user.subscriptionEndDate ? new Date(state.user.subscriptionEndDate).toLocaleDateString() : ''}</b>. Después solo podrás mantener <b>{getMaxStores()}</b> tienda(s) activa(s) según tu plan gratuito.
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -186,10 +197,15 @@ export default function StoreManager() {
                         <h3 className="font-semibold text-gray-900 admin-dark:text-white text-base lg:text-lg truncate">
                           {store.name}
                         </h3>
+                        {/* Estado de la tienda */}
+                        {store.status === 'suspended' && (
+                          <span className="!bg-gray-300 !admin-dark:bg-red-900/30 !text-gray-700 !admin-dark:text-red-400 px-2 py-1 rounded-full text-xs font-medium">Suspendida</span>
+                        )}
+                        {store.status === 'active' && (
+                          <span className="!bg-green-100 !admin-dark:bg-green-900 !text-green-800 !admin-dark:text-green-200 px-2 py-1 rounded-full text-xs font-medium">Activa</span>
+                        )}
                         {state.currentStore?.id === store.id && (
-                          <span className="bg-green-100 admin-dark:bg-green-900 text-green-800 admin-dark:text-green-200 px-2 py-1 rounded-full text-xs font-medium">
-                            Actual
-                          </span>
+                          <span className="!bg-green-100 !admin-dark:bg-green-900 !text-green-800 !admin-dark:text-green-200 px-2 py-1 rounded-full text-xs font-medium">Actual</span>
                         )}
                       </div>
                       
@@ -207,103 +223,137 @@ export default function StoreManager() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
-                    {/* Quick Actions - Desktop */}
-                    <div className="hidden lg:flex items-center gap-2">
-                      {state.currentStore?.id !== store.id && (
-                        <button
-                          onClick={() => handleSwitchStore(store)}
-                          className="px-3 py-2 text-sm font-medium text-indigo-600 admin-dark:text-indigo-400 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                        >
-                          Cambiar a esta tienda
-                        </button>
-                      )}
-                      
-                      <Link
-                        to={`/store/${store.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-purple-600 admin-dark:hover:text-purple-400 hover:bg-purple-50 admin-dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                        title="Ver catálogo"
-                      >
-                        <Eye className="w-5 h-5" />
-                      </Link>
-
-                      <Link
-                        to="/admin/settings"
-                        onClick={() => handleSwitchStore(store)}
-                        className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-blue-600 admin-dark:hover:text-blue-400 hover:bg-blue-50 admin-dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                        title="Configurar tienda"
-                      >
-                        <Settings className="w-5 h-5" />
-                      </Link>
-
-                      <button
-                        onClick={() => handleDeleteStore(store)}
-                        className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-red-600 admin-dark:hover:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Eliminar tienda"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {/* Dropdown Menu - Mobile */}
+                    {/* Solo mostrar el menú de acciones en mobile (siempre visible) */}
                     <div className="lg:hidden relative">
                       <button
                         onClick={() => setOpenDropdown(openDropdown === store.id ? null : store.id)}
                         className="p-2 text-gray-600 admin-dark:text-gray-400 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        aria-label="Más acciones"
                       >
                         <MoreVertical className="w-5 h-5" />
                       </button>
-
                       {openDropdown === store.id && (
-                        <div className="absolute right-0 top-full mt-2 w-48 bg-white admin-dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 admin-dark:border-gray-600 z-10">
-                          {state.currentStore?.id !== store.id && (
+                        <div className="absolute right-0 top-full mt-2 w-56 bg-white admin-dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 admin-dark:border-gray-600 z-20 p-2 flex flex-col gap-2">
+                          {/* Reactivar */}
+                          {store.status === 'suspended' && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await reactivateStore(store.id);
+                                  success('Tienda reactivada', 'La tienda ha sido reactivada correctamente.');
+                                  setOpenDropdown(null);
+                                } catch (err: any) {
+                                  error('No se pudo reactivar', err.message);
+                                }
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                            >
+                              <Crown className="w-4 h-4" /> Reactivar
+                            </button>
+                          )}
+                          {/* Suspender */}
+                          {store.status === 'active' && state.stores.filter(s => s.status === 'active').length > 1 && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await suspendStores([store.id]);
+                                  success('Tienda suspendida', 'La tienda ha sido desactivada correctamente.');
+                                  setOpenDropdown(null);
+                                } catch (err: any) {
+                                  error('No se pudo suspender', err.message);
+                                }
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-yellow-700 admin-dark:text-yellow-300 hover:bg-yellow-50 admin-dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
+                            >
+                              <AlertTriangle className="w-4 h-4" /> Suspender
+                            </button>
+                          )}
+                          {/* Configurar */}
+                          {store.status === 'active' && (
+                            <Link
+                              to="/admin/settings"
+                              onClick={() => {
+                                handleSwitchStore(store);
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                              <Settings className="w-4 h-4" /> Configurar
+                            </Link>
+                          )}
+                          {/* Eliminar */}
+                          {(store.status === 'active' || store.status === 'suspended') && (
+                            <button
+                              onClick={() => {
+                                handleDeleteStore(store);
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" /> Eliminar
+                            </button>
+                          )}
+                          {/* Cambiar a esta tienda */}
+                          {store.status === 'active' && state.currentStore?.id !== store.id && (
                             <button
                               onClick={() => {
                                 handleSwitchStore(store);
                                 setOpenDropdown(null);
                               }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 transition-colors"
+                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-purple-700 admin-dark:text-purple-300 hover:bg-purple-50 admin-dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                             >
-                              <Store className="w-4 h-4" />
-                              Cambiar a esta tienda
+                              <Store className="w-4 h-4" /> Cambiar a esta tienda
                             </button>
                           )}
-                          
+                          {/* Ver catálogo */}
                           <Link
                             to={`/store/${store.slug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => setOpenDropdown(null)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 transition-colors"
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-blue-700 admin-dark:text-blue-300 hover:bg-blue-50 admin-dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                           >
-                            <Eye className="w-4 h-4" />
-                            Ver Catálogo
+                            <Eye className="w-4 h-4" /> Ver catálogo
                           </Link>
-
+                        </div>
+                      )}
+                    </div>
+                    {/* Acciones desktop (sin cambios) */}
+                    <div className="hidden lg:flex items-center gap-2">
+                      {/* Acciones solo si la tienda está activa */}
+                      {(store.status === 'active' || store.status === 'suspended') && (
+                        <>
                           <Link
                             to="/admin/settings"
                             onClick={() => {
                               handleSwitchStore(store);
                               setOpenDropdown(null);
                             }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 transition-colors"
+                            className="p-2 text-gray-600 admin-dark:text-gray-400 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Configurar tienda"
                           >
-                            <Settings className="w-4 h-4" />
-                            Configurar Tienda
+                            <Settings className="w-5 h-5" />
                           </Link>
-
                           <button
                             onClick={() => {
                               handleDeleteStore(store);
                               setOpenDropdown(null);
                             }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 transition-colors"
+                            className="p-2 text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Eliminar tienda"
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Eliminar Tienda
+                            <Trash2 className="w-5 h-5" />
                           </button>
-                        </div>
+                        </>
+                      )}
+                      {/* Botón para cambiar a esta tienda solo si está activa */}
+                      {store.status === 'active' && state.currentStore?.id !== store.id && (
+                        <button
+                          onClick={() => handleSwitchStore(store)}
+                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          Cambiar a esta tienda
+                        </button>
                       )}
                     </div>
                   </div>
@@ -316,28 +366,24 @@ export default function StoreManager() {
 
       {/* Upgrade Prompt - Solo mostrar si no puede crear más tiendas */}
       {!canCreateStore() && (
-        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900 dark:to-orange-900 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center">
-              <Crown className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                Has alcanzado el límite de tu plan {planName}
-              </h3>
-              <p className="text-sm text-gray-900 dark:text-gray-100">
-                {isPremiumUser 
-                  ? `Tu plan actual permite hasta ${getMaxStores()} tiendas. Considera actualizar a un plan superior.`
-                  : 'Actualiza tu plan para crear más tiendas y acceder a funciones avanzadas'}
-              </p>
-            </div>
-            <Link
-              to="/subscription"
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-all transform hover:scale-105"
-            >
-              Ver Planes
-            </Link>
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900 dark:to-orange-900 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4 flex items-center gap-3 shadow-sm mb-2 mt-2">
+          <div className="w-8 h-8 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center">
+            <Crown className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
           </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-0.5">
+              Límite de tiendas alcanzado
+            </h3>
+            <p className="text-xs text-gray-900 dark:text-gray-100">
+              Actualiza tu plan para crear más tiendas.
+            </p>
+          </div>
+          <Link
+            to="/subscription"
+            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all shadow-sm"
+          >
+            Ver Planes
+          </Link>
         </div>
       )}
 

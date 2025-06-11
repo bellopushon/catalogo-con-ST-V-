@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Share2, Phone, Facebook, Instagram, Twitter, MessageCircle, Search, Filter } from 'lucide-react';
 import { useAnalytics } from '../../contexts/AnalyticsContext';
 import { useTheme, COLOR_PALETTES } from '../../contexts/ThemeContext';
@@ -7,6 +7,10 @@ import { formatCurrency } from '../../utils/constants';
 import { supabase } from '../../lib/supabase';
 import ProductModal from './ProductModal';
 import CartModal from './CartModal';
+import { Store, Category, Product } from '../../types';
+import { applyTheme } from '../../utils/theme';
+import { LoadingScreen } from '../common/LoadingScreen';
+import { ErrorScreen } from '../common/ErrorScreen';
 
 // 🔥 CRITICAL: Independent store loading for public catalog
 async function loadPublicStore(slug: string) {
@@ -18,10 +22,11 @@ async function loadPublicStore(slug: string) {
       .from('stores')
       .select('*')
       .eq('slug', slug)
+      .eq('status', 'active') // Solo tiendas activas
       .single();
 
     if (storeError || !storeData) {
-      console.error('❌ Store not found:', storeError);
+      console.error('❌ Store not found or not active:', storeError);
       return null;
     }
 
@@ -30,6 +35,7 @@ async function loadPublicStore(slug: string) {
       .from('categories')
       .select('*')
       .eq('store_id', storeData.id)
+      .eq('is_active', true)
       .order('created_at', { ascending: true });
 
     // Load active products for this store
@@ -119,14 +125,17 @@ async function loadPublicStore(slug: string) {
   }
 }
 
-export default function PublicCatalog() {
-  const { slug } = useParams();
+export function PublicCatalog() {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { trackVisit } = useAnalytics();
   const { applyTheme } = useTheme();
   
   // 🔥 CRITICAL: Independent state for public catalog
-  const [store, setStore] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [store, setStore] = useState<Store | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -137,19 +146,21 @@ export default function PublicCatalog() {
   const [showSearch, setShowSearch] = useState(false);
   const [hasTrackedVisit, setHasTrackedVisit] = useState(false);
 
+  const DEFAULT_CATEGORY_ID = 'default';
+
   // 🔥 CRITICAL: Load store independently from authentication context
   useEffect(() => {
     if (!slug) return;
 
     const loadStore = async () => {
       try {
-        setIsLoading(true);
+        setLoading(true);
         setError(null);
         
         const storeData = await loadPublicStore(slug);
         
         if (!storeData) {
-          setError('Tienda no encontrada');
+          setError('Esta tienda está suspendida o no está disponible.');
           return;
         }
         
@@ -187,11 +198,39 @@ export default function PublicCatalog() {
         // Set page title
         document.title = `${storeData.name} - Catálogo`;
         
-      } catch (err) {
-        console.error('❌ Error loading store:', err);
-        setError('Error al cargar la tienda');
+        // Load categories
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('store_id', storeData.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true });
+
+        if (categoriesError) {
+          console.error('Error loading categories:', categoriesError);
+        } else {
+          setCategories(categoriesData || []);
+        }
+
+        // Load products
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('*')
+          .eq('store_id', storeData.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (productsError) {
+          console.error('Error loading products:', productsError);
+        } else {
+          setProducts(productsData || []);
+        }
+
+      } catch (err: any) {
+        console.error('Error loading store:', err);
+        setError(err.message);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
@@ -210,39 +249,25 @@ export default function PublicCatalog() {
     };
   }, [slug, applyTheme, trackVisit, hasTrackedVisit]);
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando catálogo...</p>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <LoadingScreen />;
   }
 
-  // Error state
-  if (error || !store) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ShoppingCart className="w-8 h-8 text-gray-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Tienda no encontrada</h1>
-          <p className="text-gray-600">{error || 'La tienda que buscas no existe o ha sido eliminada.'}</p>
-        </div>
-      </div>
-    );
+  if (error) {
+    return <ErrorScreen message={error} onRetry={() => navigate('/')} />;
+  }
+
+  if (!store) {
+    return <ErrorScreen message="Tienda no encontrada" onRetry={() => navigate('/')} />;
   }
 
   const activeProducts = store.products || [];
-  const categories = store.categories || [];
+  const categoriesData = store.categories.filter((c: any) => c.id !== DEFAULT_CATEGORY_ID);
 
   const filteredProducts = activeProducts.filter((product: any) => {
     const matchesCategory = !selectedCategory || product.categoryId === selectedCategory;
     const matchesSearch = !searchTerm || product.name.toLowerCase().includes(searchTerm.toLowerCase());
+    if (selectedCategory && product.categoryId === DEFAULT_CATEGORY_ID) return false;
     return matchesCategory && matchesSearch;
   });
 
@@ -299,6 +324,9 @@ export default function PublicCatalog() {
   // Get current theme colors for dynamic styling
   const currentPalette = COLOR_PALETTES.find(p => p.id === (store.colorPalette || 'predeterminado')) || COLOR_PALETTES[0];
 
+  // Filtrar categorías válidas para mostrar en el catálogo público
+  const validCategories = (categories || []).filter((cat, idx) => idx < categories.length && cat.is_active && products.some(p => p.category_id === cat.id && p.is_active));
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -306,17 +334,17 @@ export default function PublicCatalog() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {store.logo && (
+              {store?.logo && (
                 <img
-                  src={store.logo}
-                  alt={store.name}
+                  src={store?.logo}
+                  alt={store?.name}
                   className="w-12 h-12 object-contain rounded-lg"
                 />
               )}
               <div>
-                <h1 className="text-xl font-bold text-gray-900">{store.name}</h1>
-                {store.description && (
-                  <p className="text-sm text-gray-600">{store.description}</p>
+                <h1 className="text-xl font-bold text-gray-900">{store?.name}</h1>
+                {store?.description && (
+                  <p className="text-sm text-gray-600">{store?.description}</p>
                 )}
               </div>
             </div>
@@ -368,7 +396,7 @@ export default function PublicCatalog() {
       </header>
 
       {/* Category Navigation */}
-      {categories.length > 0 && (
+      {validCategories.length > 0 && (
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-4xl mx-auto px-4 py-3">
             <div className="flex gap-2 overflow-x-auto">
@@ -381,10 +409,10 @@ export default function PublicCatalog() {
                 }`}
                 style={!selectedCategory ? { backgroundColor: currentPalette.primary } : {}}
               >
-                Todos ({activeProducts.length})
+                Todos ({products.length})
               </button>
-              {categories.map((category: any) => {
-                const categoryProductCount = activeProducts.filter((p: any) => p.categoryId === category.id).length;
+              {validCategories.map((category) => {
+                const categoryProductCount = products.filter((p) => p.category_id === category.id && p.is_active).length;
                 return (
                   <button
                     key={category.id}
@@ -443,7 +471,7 @@ export default function PublicCatalog() {
               <p className="text-sm text-gray-600">
                 {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} 
                 {searchTerm && ` para "${searchTerm}"`}
-                {selectedCategory && ` en ${(categories.find((c: any) => c.id === selectedCategory)?.name)}`}
+                {selectedCategory && ` en ${(categoriesData.find((c: any) => c.id === selectedCategory)?.name)}`}
               </p>
             </div>
 
@@ -496,14 +524,14 @@ export default function PublicCatalog() {
                     
                     <div className="flex items-center justify-between">
                       <p className="text-lg font-bold text-gray-900">
-                        {formatCurrency(product.price, store.currency)}
+                        {formatCurrency(product.price, store?.currency || 'USD')}
                       </p>
                       <button
                         onClick={() => addToCart(product)}
                         className="text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
                         style={{ 
                           backgroundColor: currentPalette.primary,
-                          borderRadius: `${store.borderRadius || 8}px`
+                          borderRadius: `${store?.borderRadius || 8}px`
                         }}
                       >
                         +
@@ -521,11 +549,11 @@ export default function PublicCatalog() {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-4xl mx-auto px-4 py-6">
           {/* Social Media */}
-          {store.showSocialInCatalog && (
+          {store?.showSocialInCatalog && (
             <div className="flex justify-center gap-4 mb-4">
-              {store.facebookUrl && (
+              {store?.facebookUrl && (
                 <a
-                  href={store.facebookUrl}
+                  href={store?.facebookUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
@@ -534,9 +562,9 @@ export default function PublicCatalog() {
                   <Facebook className="w-5 h-5" />
                 </a>
               )}
-              {store.instagramUrl && (
+              {store?.instagramUrl && (
                 <a
-                  href={store.instagramUrl}
+                  href={store?.instagramUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 text-gray-600 hover:text-pink-600 transition-colors"
@@ -545,9 +573,9 @@ export default function PublicCatalog() {
                   <Instagram className="w-5 h-5" />
                 </a>
               )}
-              {store.twitterUrl && (
+              {store?.twitterUrl && (
                 <a
-                  href={store.twitterUrl}
+                  href={store?.twitterUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 text-gray-600 hover:text-blue-400 transition-colors"
@@ -560,10 +588,10 @@ export default function PublicCatalog() {
           )}
 
           {/* WhatsApp Contact */}
-          {store.whatsapp && (
+          {store?.whatsapp && (
             <div className="text-center mb-4">
               <a
-                href={`https://wa.me/${store.whatsapp.replace(/[^\d]/g, '')}`}
+                href={`https://wa.me/${store?.whatsapp.replace(/[^\d]/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"

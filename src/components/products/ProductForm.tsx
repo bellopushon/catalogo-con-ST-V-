@@ -24,11 +24,22 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const { state, createProduct, updateProduct } = useStore();
+  const { state, createProduct, updateProduct, getUserPlan, getMaxProducts, getMaxCategories } = useStore();
   const { success, error } = useToast();
 
   const store = state.currentStore;
-  const categories = store?.categories || [];
+  const DEFAULT_CATEGORY_ID = 'default';
+  const DEFAULT_CATEGORY_NAME = 'Sin categoría';
+  const categories = store?.categories.filter(c => c.id !== DEFAULT_CATEGORY_ID) || [];
+
+  // Obtener plan del usuario y sus límites
+  const userPlan = getUserPlan(state.user);
+  const maxProducts = getMaxProducts();
+  const currentActiveProducts = store?.products.filter(p => p.isActive).length || 0;
+  const canCreateProduct = !product ? currentActiveProducts < maxProducts : true;
+
+  // Filtrar categorías válidas para el selector
+  const validCategories = categories.filter((cat, idx) => idx < getMaxCategories() && cat.is_active);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -47,40 +58,35 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type = 'main') => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        error('Error de archivo', 'La imagen debe ser menor a 5MB');
-        return;
-      }
+    if (!file) return;
 
-      if (!file.type.startsWith('image/')) {
-        error('Error de archivo', 'Por favor selecciona un archivo de imagen válido');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (type === 'main') {
-          setFormData(prev => ({ ...prev, mainImage: e.target?.result as string }));
-        } else {
-          if (formData.gallery.length >= 5) {
-            error('Límite alcanzado', 'Máximo 5 imágenes en la galería');
-            return;
-          }
-          setFormData(prev => ({
-            ...prev,
-            gallery: [...prev.gallery, e.target?.result as string]
-          }));
-        }
-      };
-      reader.readAsDataURL(file);
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      error('Error', 'El archivo debe ser una imagen');
+      return;
     }
+
+    // Validar tamaño (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      error('Error', 'La imagen no puede ser mayor a 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (type === 'main') {
+        setFormData(prev => ({ ...prev, mainImage: event.target?.result as string }));
+      } else {
+        setFormData(prev => ({ ...prev, gallery: [...prev.gallery, event.target?.result as string] }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const removeGalleryImage = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      gallery: prev.gallery.filter((_, i) => i !== index)
+      gallery: prev.gallery.filter((_: string, i: number) => i !== index)
     }));
   };
 
@@ -98,13 +104,14 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     } else if (isNaN(parseFloat(formData.price))) {
       newErrors.price = 'El precio debe ser un número válido';
     }
-    
-    if (!formData.categoryId) {
-      newErrors.categoryId = 'Selecciona una categoría';
-    }
 
     if (formData.shortDescription && formData.shortDescription.length > 100) {
       newErrors.shortDescription = 'La descripción corta no puede exceder 100 caracteres';
+    }
+
+    // Validar límite de productos activos
+    if (!product && formData.isActive && currentActiveProducts >= maxProducts) {
+      newErrors.isActive = `Has alcanzado el límite de ${maxProducts} productos activos en tu plan ${userPlan?.name || 'Gratuito'}`;
     }
 
     setErrors(newErrors);
@@ -123,7 +130,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         name: formData.name.trim(),
         shortDescription: formData.shortDescription.trim() || undefined,
         price: parseFloat(formData.price),
-        categoryId: formData.categoryId || undefined,
+        categoryId: !formData.categoryId || formData.categoryId === DEFAULT_CATEGORY_ID ? null : formData.categoryId,
         mainImage: formData.mainImage || undefined,
         gallery: formData.gallery,
         isActive: formData.isActive,
@@ -166,10 +173,10 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         <div className="bg-yellow-50 admin-dark:bg-yellow-900/20 border border-yellow-200 admin-dark:border-yellow-700 rounded-lg p-4">
           <div className="flex items-center gap-3 mb-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 admin-dark:text-yellow-400" />
-            <h2 className="font-semibold text-yellow-800 admin-dark:text-yellow-200">Necesitas crear categorías primero</h2>
+            <h2 className="font-semibold text-yellow-800 admin-dark:text-yellow-200">No hay categorías creadas</h2>
           </div>
           <p className="text-yellow-700 admin-dark:text-yellow-300 mb-4 text-sm">
-            Para añadir productos, primero debes crear al menos una categoría.
+            El producto se creará en la categoría "Sin categoría" por defecto. Puedes crear categorías más tarde y asignar el producto a una de ellas.
           </p>
           <button
             onClick={() => window.location.href = '/admin/categories'}
@@ -264,22 +271,17 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
               
               {formData.gallery.length > 0 ? (
                 <div className="space-y-2">
-                  {formData.gallery.map((image, index) => (
-                    <div key={index} className="flex items-center gap-2 bg-white admin-dark:bg-gray-800 p-2 rounded-lg border border-gray-200 admin-dark:border-gray-700">
+                  {formData.gallery.map((image: string, index: number) => (
+                    <div key={index} className="relative">
                       <img
                         src={image}
                         alt={`Galería ${index + 1}`}
-                        className="w-12 h-12 object-cover rounded"
+                        className="w-full h-32 object-cover rounded-lg"
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-500 admin-dark:text-gray-400 truncate">
-                          Imagen {index + 1}
-                        </p>
-                      </div>
                       <button
                         type="button"
                         onClick={() => removeGalleryImage(index)}
-                        className="p-1 bg-red-100 admin-dark:bg-red-900/30 text-red-600 admin-dark:text-red-400 rounded-full hover:bg-red-200 admin-dark:hover:bg-red-900/50 transition-colors"
+                        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -332,18 +334,18 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 admin-dark:text-gray-300 mb-1">
-                Categoría *
+                Categoría
               </label>
               <select
                 name="categoryId"
-                value={formData.categoryId}
+                value={formData.categoryId || DEFAULT_CATEGORY_ID}
                 onChange={handleInputChange}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent admin-dark:bg-gray-700 admin-dark:border-gray-600 admin-dark:text-white text-sm ${
                   errors.categoryId ? 'border-red-300 admin-dark:border-red-500' : 'border-gray-300 admin-dark:border-gray-600'
                 }`}
               >
-                <option value="">Seleccionar categoría</option>
-                {categories.map(category => (
+                <option value={DEFAULT_CATEGORY_ID}>{DEFAULT_CATEGORY_NAME}</option>
+                {validCategories.map(category => (
                   <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
@@ -401,7 +403,12 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm text-gray-700 admin-dark:text-gray-300">Estado</label>
-                    <p className="text-xs text-gray-500 admin-dark:text-gray-400">Mostrar en catálogo</p>
+                    <p className="text-xs text-gray-500 admin-dark:text-gray-400">
+                      {!product && currentActiveProducts >= maxProducts 
+                        ? `Límite alcanzado (${currentActiveProducts}/${maxProducts})`
+                        : 'Mostrar en catálogo'
+                      }
+                    </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -409,11 +416,15 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                       name="isActive"
                       checked={formData.isActive}
                       onChange={handleInputChange}
+                      disabled={!product && currentActiveProducts >= maxProducts}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-gray-200 admin-dark:bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                   </label>
                 </div>
+                {errors.isActive && (
+                  <p className="text-red-500 admin-dark:text-red-400 text-xs">{errors.isActive}</p>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div>

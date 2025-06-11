@@ -201,7 +201,7 @@ CREATE POLICY "Users can read own stores" ON stores FOR SELECT TO authenticated 
 CREATE POLICY "Users can create stores" ON stores FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own stores" ON stores FOR UPDATE TO authenticated USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own stores" ON stores FOR DELETE TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Public can read stores for catalog" ON stores FOR SELECT TO anon USING (true);
+CREATE POLICY "Public can read active stores for catalog" ON stores FOR SELECT TO anon USING (status = 'active');
 
 -- Políticas para categories
 DROP POLICY IF EXISTS "Users can manage categories of own stores" ON categories;

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, FolderOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit, Trash2, FolderOpen, AlertCircle } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { useToast } from '../../contexts/ToastContext';
+import { supabase } from '../../lib/supabase';
 
 export default function CategoryManager() {
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -22,6 +23,27 @@ export default function CategoryManager() {
   const userPlan = getUserPlan(state.user);
   const planName = userPlan?.name || 'Gratuito';
 
+  useEffect(() => {
+    // Sincronizar categorías activas/inactivas según el límite del plan
+    const syncCategoryActiveState = async () => {
+      if (!store) return;
+      const maxCategories = getMaxCategories();
+      for (let i = 0; i < categories.length; i++) {
+        const cat = categories[i];
+        const shouldBeActive = i < maxCategories;
+        if (cat.is_active !== shouldBeActive) {
+          // Actualizar en Supabase usando supabase-js
+          await supabase
+            .from('categories')
+            .update({ is_active: shouldBeActive })
+            .eq('id', cat.id);
+        }
+      }
+    };
+    syncCategoryActiveState();
+    // eslint-disable-next-line
+  }, [store?.id, categories.length, getMaxCategories]);
+
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCategoryName.trim() || !store) return;
@@ -31,6 +53,7 @@ export default function CategoryManager() {
     try {
       await createCategory({
         name: newCategoryName.trim(),
+        is_active: true,
       });
 
       setNewCategoryName('');
@@ -98,7 +121,7 @@ export default function CategoryManager() {
     }
   };
 
-  const getProductCount = (categoryId: string) => {
+  const getProductCount = (categoryId: string | null) => {
     return products.filter(p => p.categoryId === categoryId).length;
   };
 
@@ -223,85 +246,59 @@ export default function CategoryManager() {
           </div>
         ) : (
           <div className="divide-y divide-gray-200 admin-dark:divide-gray-700">
-            {categories.map(category => (
-              <div key={category.id} className="p-4 lg:p-6 flex items-center justify-between">
-                <div className="flex items-center gap-3 lg:gap-4 flex-1 min-w-0">
-                  <div className="w-10 h-10 bg-indigo-100 admin-dark:bg-indigo-900 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FolderOpen className="w-5 h-5 text-indigo-600 admin-dark:text-indigo-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {editingCategory === category.id ? (
-                      <form onSubmit={handleUpdateCategory} className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 admin-dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm lg:text-base admin-dark:bg-gray-700 admin-dark:text-white admin-dark:placeholder-gray-400"
-                          maxLength={50}
-                          autoFocus
-                          required
-                          disabled={isUpdating}
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            disabled={isUpdating}
-                            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
-                          >
-                            {isUpdating ? (
-                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            ) : (
-                              'Guardar'
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingCategory(null);
-                              setEditName('');
-                            }}
-                            disabled={isUpdating}
-                            className="bg-gray-500 hover:bg-gray-600 disabled:bg-gray-400 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <>
+            {categories.map((category, idx) => {
+              // Determinar si la categoría está inactiva por límite de plan
+              const isInactive = idx >= maxCategories;
+              return (
+                <div key={category.id} className={`p-4 lg:p-6 flex items-center justify-between ${isInactive ? 'opacity-60 pointer-events-auto' : ''}`}>
+                  <div className="flex items-center gap-3 lg:gap-4 flex-1 min-w-0">
+                    <div className="w-10 h-10 bg-indigo-100 admin-dark:bg-indigo-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <FolderOpen className="w-5 h-5 text-indigo-600 admin-dark:text-indigo-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-gray-900 admin-dark:text-white text-sm lg:text-base truncate">{category.name}</h3>
-                        <p className="text-xs lg:text-sm text-gray-500 admin-dark:text-gray-400">
-                          {getProductCount(category.id)} producto(s)
-                        </p>
-                      </>
-                    )}
+                        {isInactive && (
+                          <span className="ml-2 px-2 py-0.5 rounded-full flex items-center gap-1 bg-gray-200 text-gray-700 text-xs font-semibold border border-gray-300 admin-dark:bg-gray-800 admin-dark:text-gray-100 admin-dark:border-gray-600 shadow-sm">
+                            <AlertCircle className="w-3 h-3 text-yellow-500 admin-dark:text-yellow-300" />
+                            Inactiva
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs lg:text-sm text-gray-500 admin-dark:text-gray-400">
+                        {getProductCount(category.id)} producto(s)
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                {editingCategory !== category.id && (
-                  <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleEditCategory(category)}
-                      disabled={isDeleting === category.id}
-                      className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-indigo-600 admin-dark:hover:text-indigo-400 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCategory(category.id)}
-                      disabled={isDeleting === category.id}
-                      className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-red-600 admin-dark:hover:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
-                    >
-                      {isDeleting === category.id ? (
-                        <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
+                  {/* Solo mostrar eliminar si está inactiva, si no mostrar editar y eliminar */}
+                  {editingCategory !== category.id && (
+                    <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
+                      {!isInactive && (
+                        <button
+                          onClick={() => handleEditCategory(category)}
+                          disabled={isDeleting === category.id}
+                          className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-indigo-600 admin-dark:hover:text-indigo-400 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
                       )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+                      <button
+                        onClick={() => handleDeleteCategory(category.id)}
+                        disabled={isDeleting === category.id}
+                        className="p-2 text-gray-600 admin-dark:text-gray-400 hover:text-red-600 admin-dark:hover:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {isDeleting === category.id ? (
+                          <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
