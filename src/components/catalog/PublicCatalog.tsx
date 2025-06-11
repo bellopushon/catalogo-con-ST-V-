@@ -99,6 +99,16 @@ async function loadPublicStore(slug: string) {
       updatedAt: storeData.updated_at,
       categories,
       products,
+      paymentMethods: {
+        cash: storeData.accept_cash ?? true,
+        bankTransfer: storeData.accept_bank_transfer ?? false,
+      },
+      shippingMethods: {
+        pickup: storeData.allow_pickup ?? true,
+        delivery: storeData.allow_delivery ?? false,
+        deliveryCost: storeData.delivery_cost || 0,
+        deliveryZone: storeData.delivery_zone || undefined,
+      },
     };
 
     console.log('✅ Store loaded successfully:', store.name);
@@ -120,8 +130,8 @@ export default function PublicCatalog() {
   const [error, setError] = useState<string | null>(null);
   
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [cart, setCart] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [cart, setCart] = useState<any[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -230,17 +240,17 @@ export default function PublicCatalog() {
   const activeProducts = store.products || [];
   const categories = store.categories || [];
 
-  const filteredProducts = activeProducts.filter(product => {
+  const filteredProducts = activeProducts.filter((product: any) => {
     const matchesCategory = !selectedCategory || product.categoryId === selectedCategory;
     const matchesSearch = !searchTerm || product.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const addToCart = (product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+  const addToCart = (product: any) => {
+    setCart((prev: any[]) => {
+      const existing = prev.find((item: any) => item.product.id === product.id);
       if (existing) {
-        return prev.map(item =>
+        return prev.map((item: any) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
@@ -284,7 +294,7 @@ export default function PublicCatalog() {
     });
   };
 
-  const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartItemsCount = cart.reduce((sum: number, item: any) => sum + item.quantity, 0);
 
   // Get current theme colors for dynamic styling
   const currentPalette = COLOR_PALETTES.find(p => p.id === (store.colorPalette || 'predeterminado')) || COLOR_PALETTES[0];
@@ -350,9 +360,6 @@ export default function PublicCatalog() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
-                style={{ 
-                  '--tw-ring-color': currentPalette.primary
-                }}
                 autoFocus
               />
             </div>
@@ -376,8 +383,8 @@ export default function PublicCatalog() {
               >
                 Todos ({activeProducts.length})
               </button>
-              {categories.map(category => {
-                const categoryProductCount = activeProducts.filter(p => p.categoryId === category.id).length;
+              {categories.map((category: any) => {
+                const categoryProductCount = activeProducts.filter((p: any) => p.categoryId === category.id).length;
                 return (
                   <button
                     key={category.id}
@@ -436,12 +443,12 @@ export default function PublicCatalog() {
               <p className="text-sm text-gray-600">
                 {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} 
                 {searchTerm && ` para "${searchTerm}"`}
-                {selectedCategory && ` en ${categories.find(c => c.id === selectedCategory)?.name}`}
+                {selectedCategory && ` en ${(categories.find((c: any) => c.id === selectedCategory)?.name)}`}
               </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredProducts.map(product => (
+              {filteredProducts.map((product: any) => (
                 <div
                   key={product.id}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"

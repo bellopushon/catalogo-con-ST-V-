@@ -93,6 +93,16 @@ export function generateWhatsAppMessage(
     message += ` (+${formatCurrency(deliveryCost, currencyCode)} envío)`;
   }
   
+  // Agregar zona de cobertura si existe
+  if ((orderData as any).deliveryZone) {
+    message += `\n📍 Zona de Cobertura: ${(orderData as any).deliveryZone}`;
+  }
+  
+  // Agregar datos bancarios si existen y el método es transferencia
+  if ((orderData as any).bankDetails) {
+    message += `\n\n💳 Datos para Transferencia:\n${(orderData as any).bankDetails}`;
+  }
+  
   // Additional comments (only if template allows and comments exist)
   if (template.includeComments && comments && comments.trim()) {
     message += `\n\n💬 Comentarios: ${comments}`;

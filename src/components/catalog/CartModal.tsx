@@ -11,9 +11,22 @@ interface CartModalProps {
   onUpdateCart: (cart: any[]) => void;
 }
 
+// Define los tipos explícitos para customerData y errors
+interface CustomerData {
+  name: string;
+  address: string;
+  paymentMethod: string;
+  deliveryMethod: string;
+  comments: string;
+}
+interface Errors {
+  name?: string;
+  [key: string]: string | undefined;
+}
+
 export default function CartModal({ cart, store, onClose, onUpdateCart }: CartModalProps) {
   const { trackEvent } = useAnalytics();
-  const [customerData, setCustomerData] = useState({
+  const [customerData, setCustomerData] = useState<CustomerData>({
     name: '',
     address: '',
     paymentMethod: 'cash',
@@ -21,7 +34,7 @@ export default function CartModal({ cart, store, onClose, onUpdateCart }: CartMo
     comments: '',
   });
 
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Errors>({});
 
   const updateQuantity = (productId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
@@ -75,6 +88,8 @@ export default function CartModal({ cart, store, onClose, onUpdateCart }: CartMo
       deliveryCost,
       currencyCode: store.currency,
       storeName: store.name,
+      ...(customerData.paymentMethod === 'bankTransfer' && store.bankDetails ? { bankDetails: store.bankDetails } : {}),
+      ...(customerData.deliveryMethod === 'delivery' && store.shippingMethods?.deliveryZone ? { deliveryZone: store.shippingMethods.deliveryZone } : {}),
     };
 
     // Track order event
@@ -93,7 +108,13 @@ export default function CartModal({ cart, store, onClose, onUpdateCart }: CartMo
     });
 
     // Use the store's custom message template if available
-    const messageTemplate = store.messageTemplate || undefined;
+    const messageTemplate = {
+      greeting: store.messageGreeting || '¡Hola {storeName}!',
+      introduction: store.messageIntroduction || 'Soy {customerName}.\nMe gustaría hacer el siguiente pedido:',
+      closing: store.messageClosing || '¡Muchas gracias!',
+      includePhone: store.includePhoneInMessage ?? true,
+      includeComments: store.includeCommentsInMessage ?? true,
+    };
     const message = generateWhatsAppMessage(orderData, window.location.href, messageTemplate);
     sendWhatsAppMessage(store.whatsapp, message);
     
@@ -259,6 +280,12 @@ export default function CartModal({ cart, store, onClose, onUpdateCart }: CartMo
                     <span className="font-medium">Transferencia Bancaria</span>
                   </label>
                 )}
+                {customerData.paymentMethod === 'bankTransfer' && store.bankDetails && (
+                  <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-gray-700 text-sm whitespace-pre-line">
+                    <strong>Datos para Transferencia:</strong><br />
+                    {store.bankDetails}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -300,6 +327,11 @@ export default function CartModal({ cart, store, onClose, onUpdateCart }: CartMo
                       )}
                     </div>
                   </label>
+                )}
+                {isDeliverySelected && store.shippingMethods?.deliveryZone && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded text-blue-800 text-sm">
+                    <strong>Zona de Cobertura:</strong> {store.shippingMethods.deliveryZone}
+                  </div>
                 )}
               </div>
 
