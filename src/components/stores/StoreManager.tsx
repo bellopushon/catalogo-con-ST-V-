@@ -234,111 +234,118 @@ export default function StoreManager() {
                       </button>
                       {openDropdown === store.id && (
                         <div className="absolute right-0 top-full mt-2 w-56 bg-white admin-dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 admin-dark:border-gray-600 z-20 p-2 flex flex-col gap-2">
-                          {/* Reactivar */}
+                          {/* Tienda suspendida: solo reactivar y eliminar */}
                           {store.status === 'suspended' && (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await reactivateStore(store.id);
-                                  success('Tienda reactivada', 'La tienda ha sido reactivada correctamente.');
+                            <>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await reactivateStore(store.id);
+                                    success('Tienda reactivada', 'La tienda ha sido reactivada correctamente.');
+                                    setOpenDropdown(null);
+                                  } catch (err: any) {
+                                    error('No se pudo reactivar', err.message);
+                                  }
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                              >
+                                <Crown className="w-4 h-4" /> Reactivar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeleteStore(store);
                                   setOpenDropdown(null);
-                                } catch (err: any) {
-                                  error('No se pudo reactivar', err.message);
-                                }
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-indigo-600 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                            >
-                              <Crown className="w-4 h-4" /> Reactivar
-                            </button>
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Eliminar
+                              </button>
+                            </>
                           )}
-                          {/* Suspender */}
-                          {store.status === 'active' && state.stores.filter(s => s.status === 'active').length > 1 && (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await suspendStores([store.id]);
-                                  success('Tienda suspendida', 'La tienda ha sido desactivada correctamente.');
-                                  setOpenDropdown(null);
-                                } catch (err: any) {
-                                  error('No se pudo suspender', err.message);
-                                }
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-yellow-700 admin-dark:text-yellow-300 hover:bg-yellow-50 admin-dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
-                            >
-                              <AlertTriangle className="w-4 h-4" /> Suspender
-                            </button>
-                          )}
-                          {/* Configurar */}
+                          {/* Tienda activa: todas las acciones */}
                           {store.status === 'active' && (
-                            <Link
-                              to="/admin/settings"
-                              onClick={() => {
-                                handleSwitchStore(store);
-                                setOpenDropdown(null);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            >
-                              <Settings className="w-4 h-4" /> Configurar
-                            </Link>
+                            <>
+                              <Link
+                                to={`/store/${store.slug}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setOpenDropdown(null)}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-blue-700 admin-dark:text-blue-300 hover:bg-blue-50 admin-dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-4 h-4" /> Ver catálogo
+                              </Link>
+                              <Link
+                                to="/admin/settings"
+                                onClick={() => {
+                                  handleSwitchStore(store);
+                                  setOpenDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 admin-dark:text-gray-300 hover:bg-gray-50 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+                              >
+                                <Settings className="w-4 h-4" /> Configurar
+                              </Link>
+                              <button
+                                onClick={() => {
+                                  handleDeleteStore(store);
+                                  setOpenDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Eliminar
+                              </button>
+                              {state.currentStore?.id !== store.id && (
+                                <button
+                                  onClick={() => {
+                                    handleSwitchStore(store);
+                                    setOpenDropdown(null);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-purple-700 admin-dark:text-purple-300 hover:bg-purple-50 admin-dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                >
+                                  <Store className="w-4 h-4" /> Cambiar a esta tienda
+                                </button>
+                              )}
+                              {state.stores.filter(s => s.status === 'active').length > 1 && (
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await suspendStores([store.id]);
+                                      success('Tienda suspendida', 'La tienda ha sido desactivada correctamente.');
+                                      setOpenDropdown(null);
+                                    } catch (err: any) {
+                                      error('No se pudo suspender', err.message);
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-yellow-700 admin-dark:text-yellow-300 hover:bg-yellow-50 admin-dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
+                                >
+                                  <AlertTriangle className="w-4 h-4" /> Suspender
+                                </button>
+                              )}
+                            </>
                           )}
-                          {/* Eliminar */}
-                          {(store.status === 'active' || store.status === 'suspended') && (
-                            <button
-                              onClick={() => {
-                                handleDeleteStore(store);
-                                setOpenDropdown(null);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4" /> Eliminar
-                            </button>
-                          )}
-                          {/* Cambiar a esta tienda */}
-                          {store.status === 'active' && state.currentStore?.id !== store.id && (
-                            <button
-                              onClick={() => {
-                                handleSwitchStore(store);
-                                setOpenDropdown(null);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-purple-700 admin-dark:text-purple-300 hover:bg-purple-50 admin-dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                            >
-                              <Store className="w-4 h-4" /> Cambiar a esta tienda
-                            </button>
-                          )}
-                          {/* Ver catálogo */}
-                          <Link
-                            to={`/store/${store.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setOpenDropdown(null)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-blue-700 admin-dark:text-blue-300 hover:bg-blue-50 admin-dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                          >
-                            <Eye className="w-4 h-4" /> Ver catálogo
-                          </Link>
                         </div>
                       )}
                     </div>
                     {/* Acciones desktop (sin cambios) */}
                     <div className="hidden lg:flex items-center gap-2">
-                      {/* Acciones solo si la tienda está activa */}
-                      {(store.status === 'active' || store.status === 'suspended') && (
+                      {/* Tienda suspendida: solo reactivar y eliminar */}
+                      {store.status === 'suspended' && (
                         <>
-                          <Link
-                            to="/admin/settings"
-                            onClick={() => {
-                              handleSwitchStore(store);
-                              setOpenDropdown(null);
-                            }}
-                            className="p-2 text-gray-600 admin-dark:text-gray-400 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
-                            title="Configurar tienda"
-                          >
-                            <Settings className="w-5 h-5" />
-                          </Link>
                           <button
-                            onClick={() => {
-                              handleDeleteStore(store);
-                              setOpenDropdown(null);
+                            onClick={async () => {
+                              try {
+                                await reactivateStore(store.id);
+                                success('Tienda reactivada', 'La tienda ha sido reactivada correctamente.');
+                              } catch (err: any) {
+                                error('No se pudo reactivar', err.message);
+                              }
                             }}
+                            className="p-2 text-indigo-600 admin-dark:text-indigo-400 hover:bg-indigo-50 admin-dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                            title="Reactivar tienda"
+                          >
+                            <Crown className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStore(store)}
                             className="p-2 text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             title="Eliminar tienda"
                           >
@@ -346,14 +353,57 @@ export default function StoreManager() {
                           </button>
                         </>
                       )}
-                      {/* Botón para cambiar a esta tienda solo si está activa */}
-                      {store.status === 'active' && state.currentStore?.id !== store.id && (
-                        <button
-                          onClick={() => handleSwitchStore(store)}
-                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                        >
-                          Cambiar a esta tienda
-                        </button>
+                      {/* Tienda activa: todas las acciones */}
+                      {store.status === 'active' && (
+                        <>
+                          <Link
+                            to={`/store/${store.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 text-blue-700 admin-dark:text-blue-300 hover:bg-blue-50 admin-dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Ver catálogo"
+                          >
+                            <Eye className="w-5 h-5" />
+                          </Link>
+                          <Link
+                            to="/admin/settings"
+                            onClick={() => handleSwitchStore(store)}
+                            className="p-2 text-gray-600 admin-dark:text-gray-400 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            title="Configurar tienda"
+                          >
+                            <Settings className="w-5 h-5" />
+                          </Link>
+                          <button
+                            onClick={() => handleDeleteStore(store)}
+                            className="p-2 text-red-600 admin-dark:text-red-400 hover:bg-red-50 admin-dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            title="Eliminar tienda"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                          {state.currentStore?.id !== store.id && (
+                            <button
+                              onClick={() => handleSwitchStore(store)}
+                              className="px-3 py-2 text-sm font-medium text-purple-700 admin-dark:text-purple-300 hover:bg-purple-50 admin-dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                            >
+                              Cambiar a esta tienda
+                            </button>
+                          )}
+                          {state.stores.filter(s => s.status === 'active').length > 1 && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await suspendStores([store.id]);
+                                  success('Tienda suspendida', 'La tienda ha sido desactivada correctamente.');
+                                } catch (err: any) {
+                                  error('No se pudo suspender', err.message);
+                                }
+                              }}
+                              className="px-3 py-2 text-sm font-medium text-yellow-700 admin-dark:text-yellow-300 hover:bg-yellow-50 admin-dark:hover:bg-yellow-900/20 rounded-lg transition-colors"
+                            >
+                              Suspender
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

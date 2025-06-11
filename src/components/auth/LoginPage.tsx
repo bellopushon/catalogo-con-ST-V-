@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
+import { LoadingScreen } from '../common/LoadingScreen';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,6 +15,14 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { state, login, register } = useStore();
 
+  // AGREGA ESTOS LOGS PARA DEBUGGING
+  console.log('🔍 LoginPage - Estado actual:', {
+    isInitialized: state.isInitialized,
+    isAuthenticated: state.isAuthenticated,
+    user: state.user?.email,
+    isLoading: state.isLoading
+  });
+
   // Check if register parameter is in URL
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -22,12 +31,16 @@ export default function LoginPage() {
     }
   }, []);
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (state.isAuthenticated) {
-      navigate('/admin', { replace: true });
-    }
-  }, [state.isAuthenticated, navigate]);
+  // Primero esperar a que se inicialice
+  if (!state.isInitialized) {
+    return <LoadingScreen />;
+  }
+
+  // Si está autenticado, redirigir inmediatamente
+  if (state.isAuthenticated) {
+    navigate('/admin', { replace: true });
+    return <LoadingScreen />;
+  } 
 
   const validateForm = () => {
     const newErrors: any = {};

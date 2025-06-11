@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore } from './contexts/StoreContext';
 import { AnalyticsProvider } from './contexts/AnalyticsContext';
@@ -74,15 +74,33 @@ function AppRoutes() {
   const { state } = useStore();
   const { isDarkMode } = useTheme();
   const location = useLocation();
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 🎨 Handle dark mode for admin routes only
+  // Efecto para manejar el loading
   useEffect(() => {
+    // Mostrar loading mientras la app no esté inicializada
+    if (!state.isInitialized) {
+      setIsLoading(true);
+      return;
+    }
+
+    // Pequeño delay para asegurar una transición suave
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [state.isInitialized]);
+
+  // Efecto para manejar el tema oscuro
+  useEffect(() => {
+    if (isLoading) return; // No aplicar tema mientras carga
+
     const isAdminRoute = location.pathname.startsWith('/admin') || 
                         location.pathname === '/profile' || 
                         location.pathname === '/subscription';
     
     const isPublicRoute = location.pathname.startsWith('/store/') || 
-                         location.pathname === '/login' ||
                          location.pathname === '/pricing' ||
                          location.pathname.startsWith('/payment/');
     
@@ -106,15 +124,21 @@ function AppRoutes() {
       document.documentElement.classList.remove('admin-dark');
       document.body.classList.remove('admin-dark');
     }
-  }, [location.pathname, isDarkMode]);
+  }, [location.pathname, isDarkMode, isLoading]);
 
-  // 🔥 CRITICAL: Show loading screen only for protected routes
-  const isProtectedRoute = location.pathname.startsWith('/admin') || 
-                          location.pathname === '/profile' || 
-                          location.pathname === '/subscription';
-
-  if (isProtectedRoute && !state.isInitialized) {
+  // Si está cargando, mostrar loading screen
+  if (isLoading) {
     return <LoadingScreen />;
+  }
+
+  // Si está autenticado y está en una ruta pública (excepto /store/*), redirigir a /admin
+  if (state.isAuthenticated && 
+      !location.pathname.startsWith('/admin') && 
+      !location.pathname.startsWith('/store/') && 
+      !location.pathname.startsWith('/payment/') && 
+      location.pathname !== '/profile' && 
+      location.pathname !== '/subscription') {
+    return <Navigate to="/admin" replace />;
   }
 
   return (
@@ -123,7 +147,7 @@ function AppRoutes() {
       <Route path="/store/:slug" element={<PublicCatalog />} />
       <Route path="/pricing" element={<PricingPage />} />
       
-      {/* 🔐 LOGIN ROUTE */}
+      {/* 🔐 LOGIN ROUTE - Solo accesible si NO está autenticado */}
       <Route path="/login" element={
         state.isAuthenticated ? (
           <Navigate to="/admin" replace />

@@ -563,19 +563,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    const isProtectedRoute = location.pathname.startsWith('/admin') || 
-                            location.pathname === '/profile' || 
-                            location.pathname === '/subscription';
-
-    // Si no es una ruta protegida, marcar como inicializado y salir
-    if (!isProtectedRoute) {
-      dispatch({ type: 'SET_INITIALIZED', payload: true });
-      return;
-    }
-
     const initializeAuth = async () => {
       try {
         console.log('🔄 Initializing authentication...');
+        console.log('🔄 Initializing authentication...');
+console.log('🔐 checkAuth - Verificando autenticación...'); // AGREGA ESTA LÍNEA
         
         // Obtener la sesión actual de Supabase primero
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -641,6 +633,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               
               const appUser = transformSupabaseUserToAppUser(session.user, userData || {});
               if (appUser) {
+                console.log('✅ Usuario autenticado:', appUser.email);
                 dispatch({ type: 'SET_USER', payload: appUser });
                 dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
@@ -706,6 +699,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               .single();
 
             const appUser = transformSupabaseUserToAppUser(session.user, userData);
+            console.log('✅ Usuario autenticado (fallback):', appUser.email);
             dispatch({ type: 'SET_USER', payload: appUser });
             dispatch({ type: 'SET_AUTHENTICATED', payload: true });
 
