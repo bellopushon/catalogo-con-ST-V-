@@ -409,7 +409,7 @@ export function PublicCatalog() {
                 }`}
                 style={!selectedCategory ? { backgroundColor: currentPalette.primary } : {}}
               >
-                Todos ({products.length})
+                Todos
               </button>
               {validCategories.map((category) => {
                 const categoryProductCount = products.filter((p) => p.category_id === category.id && p.is_active).length;
@@ -424,7 +424,7 @@ export function PublicCatalog() {
                     }`}
                     style={selectedCategory === category.id ? { backgroundColor: currentPalette.primary } : {}}
                   >
-                    {category.name} ({categoryProductCount})
+                    {category.name}
                   </button>
                 );
               })}
