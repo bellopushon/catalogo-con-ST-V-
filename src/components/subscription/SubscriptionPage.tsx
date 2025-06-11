@@ -53,25 +53,22 @@ export default function SubscriptionPage() {
 
   const handlePlanSelect = (planId: string) => {
     setSelectedPlan(planId);
-    
-    // Si el plan seleccionado es premium y el usuario no tiene un plan premium actualmente
-    if (planId !== 'gratuito' && !isCurrentlyPremium) {
+    const selectedPlanObj = plans.find(p => p.id === planId);
+    const isSelectedPlanFree = selectedPlanObj?.isFree;
+    const isCurrentPlanFree = userPlan?.isFree;
+
+    // Si el usuario selecciona un plan de pago (upgrade o cambio), mostrar pago
+    if (!isSelectedPlanFree) {
       setShowPayment(true);
+      return;
     }
-    
-    // Si el usuario ya tiene un plan premium y quiere cambiar a otro plan premium
-    else if (planId !== 'gratuito' && isCurrentlyPremium && planId !== currentPlan) {
-      // Mostrar confirmación para cambiar entre planes premium
-      if (window.confirm(`¿Estás seguro de que quieres cambiar al plan ${planId}?`)) {
-        handlePlanChange(planId);
-      }
-    }
-    
-    // Si el usuario quiere volver al plan gratuito desde un plan premium
-    else if (planId === 'gratuito' && isCurrentlyPremium) {
+
+    // Si el usuario selecciona el plan gratuito (downgrade)
+    if (isSelectedPlanFree && !isCurrentPlanFree) {
       if (window.confirm('¿Estás seguro de que quieres volver al plan gratuito? Perderás todas las funciones premium.')) {
         handleDowngrade();
       }
+      return;
     }
   };
 
@@ -95,7 +92,7 @@ export default function SubscriptionPage() {
         .from('users')
         .update({
           plan: newPlan,
-          subscription_status: 'active',
+          subscription_status: 'active' as const,
           subscription_start_date: new Date().toISOString(),
           subscription_end_date: subscriptionEndDate.toISOString(),
           updated_at: new Date().toISOString(),
@@ -110,7 +107,7 @@ export default function SubscriptionPage() {
       const updatedUser = {
         ...state.user!,
         plan: newPlan,
-        subscriptionStatus: 'active',
+        subscriptionStatus: 'active' as const,
         subscriptionStartDate: new Date().toISOString(),
         subscriptionEndDate: subscriptionEndDate.toISOString(),
         updatedAt: new Date().toISOString(),
@@ -166,7 +163,7 @@ export default function SubscriptionPage() {
         .from('users')
         .update({
           plan: 'gratuito',
-          subscription_status: 'canceled',
+          subscription_status: 'canceled' as const,
           subscription_canceled_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -180,7 +177,7 @@ export default function SubscriptionPage() {
       const updatedUser = {
         ...state.user!,
         plan: 'gratuito',
-        subscriptionStatus: 'canceled',
+        subscriptionStatus: 'canceled' as const,
         subscriptionCanceledAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -226,7 +223,7 @@ export default function SubscriptionPage() {
         .update({
           plan: selectedPlan,
           subscription_id: `sub_${Date.now()}`,
-          subscription_status: 'active',
+          subscription_status: 'active' as const,
           subscription_start_date: new Date().toISOString(),
           subscription_end_date: subscriptionEndDate.toISOString(),
           payment_method: paymentData.method,
@@ -243,7 +240,7 @@ export default function SubscriptionPage() {
         ...state.user!,
         plan: selectedPlan,
         subscriptionId: `sub_${Date.now()}`,
-        subscriptionStatus: 'active',
+        subscriptionStatus: 'active' as const,
         subscriptionStartDate: new Date().toISOString(),
         subscriptionEndDate: subscriptionEndDate.toISOString(),
         paymentMethod: paymentData.method,

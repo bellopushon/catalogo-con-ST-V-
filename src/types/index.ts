@@ -30,4 +30,27 @@ export interface Product {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  bio?: string;
+  avatar?: string;
+  company?: string;
+  location?: string;
+  plan: string;
+  subscriptionId?: string;
+  subscriptionStatus?: 'active' | 'canceled' | 'expired';
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+  subscriptionCanceledAt?: string;
+  paymentMethod?: string;
+  paymentProvider?: 'stripe' | 'paypal' | null;
+  stripeCustomerId?: string;
+  paypalSubscriberId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 } 

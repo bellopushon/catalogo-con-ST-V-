@@ -1,833 +1,126 @@
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Crown, Calendar, CreditCard, Download, AlertTriangle, Check, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Crown, CreditCard } from 'lucide-react';
 import { useStore } from '../../contexts/StoreContext';
 import { useToast } from '../../contexts/ToastContext';
-import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
-import DowngradeWarningModal from './DowngradeWarningModal';
 
 export default function ActiveSubscription() {
-  const { state, dispatch, getUserPlan } = useStore();
-  const { success, error } = useToast();
-  const { isDarkMode } = useTheme();
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showPlanSelection, setShowPlanSelection] = useState(false);
-  const [selectedNewPlan, setSelectedNewPlan] = useState('');
-  const [isCanceling, setIsCanceling] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { state } = useStore();
+  const { error } = useToast();
+  const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
   const user = state.user;
-  
-  // Obtener plan actual del usuario
-  const userPlan = getUserPlan(user);
-  
-  const subscriptionEndDate = user?.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
-  const daysRemaining = subscriptionEndDate ? Math.ceil((subscriptionEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const userPlan = state.plans.find(p => p.id === user?.plan);
 
-  // Obtener el siguiente plan recomendado dinámicamente
-  const getNextRecommendedPlan = () => {
-    if (!userPlan) return state.plans.find(p => !p.isFree && p.isActive);
-    
-    // Si el usuario ya tiene un plan premium, recomendar el siguiente nivel
-    if (!userPlan.isFree) {
-      const nextLevel = userPlan.level + 1;
-      const nextPlan = state.plans.find(p => p.level === nextLevel && p.isActive);
-      return nextPlan || state.plans.filter(p => !p.isFree && p.isActive).pop(); // El último si no hay siguiente
-    }
-    
-    // Si es plan gratuito, recomendar el primer plan premium
-    return state.plans.find(p => !p.isFree && p.isActive);
-  };
-  
-  const recommendedPlan = getNextRecommendedPlan();
-
-  useEffect(() => {
-    // Verificar el estado de la suscripción al cargar
-    const checkSubscriptionStatus = async () => {
-      try {
-        // Get current user
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
-        if (!currentUser) {
-          throw new Error('No user found');
-        }
-        
-        // Get user data from database
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', currentUser.id)
-          .single();
-
-        if (userError) {
-          throw userError;
-        }
-        
-        // Update local state if needed
-        if (userData) {
-          const appUser = {
-            ...state.user!,
-            plan: userData.plan,
-            subscriptionStatus: userData.subscription_status,
-            subscriptionStartDate: userData.subscription_start_date,
-            subscriptionEndDate: userData.subscription_end_date,
-            subscriptionCanceledAt: userData.subscription_canceled_at,
-            paymentMethod: userData.payment_method,
-          };
-          
-          dispatch({ type: 'SET_USER', payload: appUser });
-        }
-      } catch (err) {
-        console.error('Error checking subscription status:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkSubscriptionStatus();
-  }, []);
-
-  const handleCancelSubscription = async () => {
-    // Check if user will exceed store limits after cancellation
-    const currentStoreCount = state.stores.length;
-    const freePlan = state.plans.find(p => p.isFree && p.isActive);
-    const maxStoresAfterCancel = freePlan?.maxStores || 1;
-    
-    if (currentStoreCount > maxStoresAfterCancel) {
-      setShowCancelModal(false);
-      setShowDowngradeWarning(true);
-      return;
-    }
-
-    // Proceed with normal cancellation
-    await processCancellation();
-  };
-
-  const processCancellation = async () => {
-    setIsCanceling(true);
-    
+  const handleOpenBillingPortal = async () => {
+    setIsLoadingPortal(true);
     try {
-      // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) {
-        throw new Error('No user found');
+      if (!user?.stripeCustomerId) {
+        throw new Error('No tienes un cliente de Stripe asociado. Si ya te suscribiste, contacta soporte.');
       }
-      
-      // Update user in database
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          subscription_status: 'canceled',
-          subscription_canceled_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+
+      const response = await fetch('https://dpggztqltotvvfqmlvny.supabase.co/functions/v1/create-portal-session', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('supabase.auth.token')}`
+        },
+        body: JSON.stringify({ 
+          customerId: user.stripeCustomerId,
+          returnUrl: window.location.origin + '/subscription'
         })
-        .eq('id', currentUser.id);
+      });
 
-      if (updateError) {
-        throw updateError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al abrir el portal de pagos');
       }
-      
-      // Update local state
-      const updatedUser = {
-        ...user!,
-        subscriptionStatus: 'canceled',
-        subscriptionCanceledAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
 
-      dispatch({ type: 'SET_USER', payload: updatedUser });
-      
-      success(
-        'Suscripción cancelada',
-        'Tu suscripción se cancelará al final del período actual. Mantienes acceso hasta entonces.'
-      );
-      
-      setShowCancelModal(false);
-      setShowDowngradeWarning(false);
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No se pudo obtener la URL del portal de pagos');
+      }
     } catch (err: any) {
-      console.error('Cancellation error:', err);
-      error('Error al cancelar', err.message || 'No se pudo cancelar la suscripción. Intenta de nuevo.');
+      console.error('Error al abrir portal:', err);
+      error('Error al abrir portal', err.message || 'No se pudo abrir el portal de pagos. Por favor intenta de nuevo.');
     } finally {
-      setIsCanceling(false);
+      setIsLoadingPortal(false);
     }
-  };
-
-  // Función para reactivar con plan seleccionado
-  const handleReactivateWithPlan = async (planId: string) => {
-    try {
-      setIsCanceling(true);
-      
-      // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) {
-        throw new Error('No user found');
-      }
-      
-      // Calculate subscription end date (30 days from now)
-      const subscriptionEndDate = new Date();
-      subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
-      
-      // Update user in database
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          plan: planId,
-          subscription_status: 'active',
-          subscription_start_date: new Date().toISOString(),
-          subscription_end_date: subscriptionEndDate.toISOString(),
-          subscription_canceled_at: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentUser.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-      
-      // Update local state
-      const updatedUser = {
-        ...user!,
-        plan: planId,
-        subscriptionStatus: 'active',
-        subscriptionStartDate: new Date().toISOString(),
-        subscriptionEndDate: subscriptionEndDate.toISOString(),
-        subscriptionCanceledAt: undefined,
-        updatedAt: new Date().toISOString(),
-      };
-
-      dispatch({ type: 'SET_USER', payload: updatedUser });
-      
-      // Obtener nombre del plan dinámicamente
-      const selectedPlan = state.plans.find(p => p.id === planId);
-      const planName = selectedPlan?.name || 'Premium';
-      
-      success(
-        `¡Suscripción reactivada con plan ${planName}!`,
-        'Tu suscripción ha sido reactivada exitosamente.'
-      );
-      
-      setShowPlanSelection(false);
-    } catch (err: any) {
-      console.error('Reactivation error:', err);
-      error('Error al reactivar', err.message || 'No se pudo reactivar la suscripción. Intenta de nuevo.');
-    } finally {
-      setIsCanceling(false);
-    }
-  };
-
-  // Función para mostrar selección de planes
-  const handleShowPlanSelection = () => {
-    setShowPlanSelection(true);
-  };
-
-  const handleUpgradeToPro = async () => {
-    try {
-      setShowUpgradeModal(false);
-      
-      // Get current user
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) {
-        throw new Error('No user found');
-      }
-      
-      // Usar el plan recomendado dinámicamente
-      if (!recommendedPlan) {
-        throw new Error('No recommended plan found');
-      }
-      
-      // Calculate new subscription end date (30 days from now)
-      const subscriptionEndDate = new Date();
-      subscriptionEndDate.setDate(subscriptionEndDate.getDate() + 30);
-      
-      // Update user in database
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          plan: recommendedPlan.id,
-          subscription_status: 'active',
-          subscription_start_date: new Date().toISOString(),
-          subscription_end_date: subscriptionEndDate.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentUser.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-      
-      // Update local state
-      const updatedUser = {
-        ...user!,
-        plan: recommendedPlan.id,
-        subscriptionStatus: 'active',
-        subscriptionStartDate: new Date().toISOString(),
-        subscriptionEndDate: subscriptionEndDate.toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      dispatch({ type: 'SET_USER', payload: updatedUser });
-      
-      success(
-        `¡Plan actualizado a ${recommendedPlan.name}!`,
-        'Ahora tienes acceso a todas las funciones premium.'
-      );
-      
-      // Redirect to dashboard after a moment
-      setTimeout(() => {
-        window.location.href = '/admin';
-      }, 2000);
-    } catch (err: any) {
-      console.error('Upgrade error:', err);
-      error('Error al actualizar', err.message || 'No se pudo actualizar el plan. Intenta de nuevo.');
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 admin-dark:text-gray-300">Cargando información de suscripción...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const isCanceled = user?.subscriptionStatus === 'canceled';
-  
-  // Obtener información del plan dinámicamente
-  const planName = userPlan?.name || 'Premium';
-  const planPrice = userPlan?.price.toFixed(2) || '0.00';
-
-  // Obtener límites del plan dinámicamente
-  const limits = {
-    stores: userPlan?.maxStores || 1,
-    products: userPlan?.maxProducts || 10,
-    categories: userPlan?.maxCategories || 3
-  };
-
-  // Componente para selección de planes
-  const PlanSelectionModal = () => {
-    const availablePlans = state.plans.filter(p => p.isActive && !p.isFree);
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white">Selecciona un Plan</h2>
-            <button
-              onClick={() => setShowPlanSelection(false)}
-              className="p-2 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <p className="text-gray-600 admin-dark:text-gray-300 mb-6">
-            Selecciona el plan con el que deseas reactivar tu suscripción:
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {availablePlans.map(plan => (
-              <div 
-                key={plan.id}
-                className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${
-                  selectedNewPlan === plan.id 
-                    ? 'border-indigo-500 bg-indigo-50 admin-dark:bg-indigo-900/30 admin-dark:border-indigo-400' 
-                    : 'border-gray-200 admin-dark:border-gray-600 hover:border-gray-300 admin-dark:hover:border-gray-500'
-                }`}
-                onClick={() => setSelectedNewPlan(plan.id)}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">{plan.name}</h3>
-                  {selectedNewPlan === plan.id && (
-                    <Check className="w-5 h-5 text-indigo-600 admin-dark:text-indigo-400" />
-                  )}
-                </div>
-                
-                <div className="text-2xl font-bold text-gray-900 admin-dark:text-white mb-2">
-                  ${plan.price.toFixed(2)}<span className="text-sm text-gray-500 admin-dark:text-gray-400">/mes</span>
-                </div>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Tiendas: {plan.maxStores === 999999 ? '∞' : plan.maxStores}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Productos: {plan.maxProducts === 999999 ? '∞' : plan.maxProducts}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 admin-dark:text-gray-300">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>Categorías: {plan.maxCategories === 999999 ? '∞' : plan.maxCategories}</span>
-                  </div>
-                </div>
-                
-                {plan.features && plan.features.length > 0 && (
-                  <div className="text-xs text-gray-500 admin-dark:text-gray-400">
-                    {Array.isArray(plan.features) && plan.features.slice(0, 3).map((feature, idx) => (
-                      <div key={idx}>{feature}</div>
-                    ))}
-                    {Array.isArray(plan.features) && plan.features.length > 3 && (
-                      <div>+{plan.features.length - 3} más...</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowPlanSelection(false)}
-              className="flex-1 px-4 py-3 border border-gray-300 admin-dark:border-gray-600 text-gray-700 admin-dark:text-gray-300 rounded-lg hover:bg-gray-50 admin-dark:hover:bg-gray-700 font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => handleReactivateWithPlan(selectedNewPlan)}
-              disabled={!selectedNewPlan || isCanceling}
-              className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isCanceling ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Procesando...</span>
-                </>
-              ) : (
-                'Reactivar Suscripción'
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
     <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white admin-dark:bg-gray-800 border-b border-gray-200 admin-dark:border-gray-700">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => window.history.back()}
-              className="p-2 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-900 admin-dark:text-white" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 admin-dark:text-white">Mi Suscripción</h1>
-              <p className="text-gray-600 admin-dark:text-gray-300 mt-1">Gestiona tu plan {planName}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Subscription Status */}
-        <div className={`rounded-2xl shadow-lg border-2 p-6 lg:p-8 mb-8 ${
-          isCanceled 
-            ? 'bg-orange-50 admin-dark:bg-orange-900/20 border-orange-200 admin-dark:border-orange-800'
-            : 'bg-gradient-to-r from-indigo-50 to-purple-50 admin-dark:from-indigo-900/20 admin-dark:to-purple-900/20 border-indigo-200 admin-dark:border-indigo-800'
-        }`}>
-          <div className="flex items-center gap-4 mb-6">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-              isCanceled 
-                ? 'bg-orange-100 admin-dark:bg-orange-900'
-                : 'bg-gradient-to-r from-yellow-400 to-orange-500'
-            }`}>
-              {isCanceled ? (
-                <AlertTriangle className="w-8 h-8 text-orange-600 admin-dark:text-orange-400" />
-              ) : (
-                <Crown className="w-8 h-8 text-white" />
-              )}
-            </div>
+        <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 admin-dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className={`text-2xl font-bold ${
-                isCanceled 
-                  ? 'text-orange-800 admin-dark:text-orange-200'
-                  : 'text-indigo-800 admin-dark:text-indigo-200'
-              }`}>
-                Plan {planName} {isCanceled ? '(Cancelado)' : '(Activo)'}
+              <h2 className="text-2xl font-bold text-gray-900 admin-dark:text-white">
+                Tu Suscripción Actual
               </h2>
-              <p className={`text-lg ${
-                isCanceled 
-                  ? 'text-orange-700 admin-dark:text-orange-300'
-                  : 'text-indigo-700 admin-dark:text-indigo-300'
+              <p className="text-gray-600 admin-dark:text-gray-300 mt-1">
+                {userPlan?.name || 'Plan Gratuito'}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-r from-indigo-100 to-purple-100 admin-dark:from-indigo-900/30 admin-dark:to-purple-900/30 rounded-lg flex items-center justify-center">
+              <Crown className="w-6 h-6 text-indigo-600 admin-dark:text-indigo-400" />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 admin-dark:bg-gray-700/50 rounded-lg">
+              <div>
+                <h3 className="font-medium text-gray-900 admin-dark:text-white">Estado de la Suscripción</h3>
+                <p className="text-sm text-gray-600 admin-dark:text-gray-300">
+                  {user?.subscriptionStatus === 'active' ? 'Activa' : 'Inactiva'}
+                </p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                user?.subscriptionStatus === 'active'
+                  ? 'bg-green-100 text-green-800 admin-dark:bg-green-900/30 admin-dark:text-green-400'
+                  : 'bg-red-100 text-red-800 admin-dark:bg-red-900/30 admin-dark:text-red-400'
               }`}>
-                {isCanceled 
-                  ? `Acceso hasta ${subscriptionEndDate?.toLocaleDateString('es-ES')}`
-                  : `${daysRemaining} días restantes en este período`
-                }
-              </p>
+                {user?.subscriptionStatus === 'active' ? 'Activa' : 'Inactiva'}
+              </span>
             </div>
-          </div>
 
-          {isCanceled && (
-            <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-between">
+            {user?.subscriptionEndDate && (
+              <div className="flex items-center justify-between p-4 bg-gray-50 admin-dark:bg-gray-700/50 rounded-lg">
                 <div>
-                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">¿Cambiaste de opinión?</h3>
+                  <h3 className="font-medium text-gray-900 admin-dark:text-white">Próxima Facturación</h3>
                   <p className="text-sm text-gray-600 admin-dark:text-gray-300">
-                    Puedes reactivar tu suscripción en cualquier momento
+                    {new Date(user.subscriptionEndDate).toLocaleDateString()}
                   </p>
                 </div>
-                {/* Botón para mostrar selección de planes */}
-                <button
-                  onClick={handleShowPlanSelection}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-all"
-                >
-                  Reactivar
-                </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Upgrade Option for lower tier plans */}
-          {!isCanceled && userPlan && userPlan.level < 3 && recommendedPlan && (
-            <div className="bg-white admin-dark:bg-gray-800 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-900 admin-dark:text-white">¿Necesitas más funciones?</h3>
-                  <p className="text-sm text-gray-600 admin-dark:text-gray-300">
-                    {userPlan.level === 1 
-                      ? `Actualiza a un plan premium y obtén más tiendas y productos`
-                      : `Actualiza al plan ${recommendedPlan.name} y obtén hasta ${recommendedPlan.maxStores} tiendas`
-                    }
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowUpgradeModal(true)}
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-2 rounded-lg font-medium transition-all"
-                >
-                  Actualizar Plan
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
-                {limits.stores === 999999 ? '∞' : limits.stores}
-              </div>
-              <div className="text-sm text-gray-600 admin-dark:text-gray-300">Tiendas máximas</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
-                {limits.products === 999999 ? '∞' : limits.products}
-              </div>
-              <div className="text-sm text-gray-600 admin-dark:text-gray-300">Productos por tienda</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-gray-900 admin-dark:text-white">
-                {limits.categories === 999999 ? '∞' : limits.categories}
-              </div>
-              <div className="text-sm text-gray-600 admin-dark:text-gray-300">Categorías por tienda</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Billing Information and Usage Statistics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Billing Information */}
-          <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 admin-dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-6">Información de Facturación</h3>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 admin-dark:text-gray-300">Plan</span>
-                <span className="font-medium text-gray-900 admin-dark:text-white">{planName}</span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 admin-dark:text-gray-300">Precio</span>
-                <span className="font-medium text-gray-900 admin-dark:text-white">${planPrice}/mes</span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 admin-dark:text-gray-300">Próxima facturación</span>
-                <span className="font-medium text-gray-900 admin-dark:text-white">
-                  {subscriptionEndDate?.toLocaleDateString('es-ES')}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 admin-dark:text-gray-300">Método de pago</span>
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-gray-500" />
-                  <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {user?.paymentMethod === 'paypal' ? 'PayPal' : '•••• 1234'}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600 admin-dark:text-gray-300">Estado</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  isCanceled
-                    ? 'bg-orange-100 admin-dark:bg-orange-900 text-orange-800 admin-dark:text-orange-200'
-                    : 'bg-green-100 admin-dark:bg-green-900 text-green-800 admin-dark:text-green-200'
-                }`}>
-                  {isCanceled ? 'Cancelado' : 'Activo'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Usage Statistics */}
-          <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 admin-dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-6">Uso Actual</h3>
-            
-            <div className="space-y-6">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 admin-dark:text-gray-300">Tiendas</span>
-                  <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {state.stores.length} / {limits.stores === 999999 ? '∞' : limits.stores}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full"
-                    style={{ 
-                      width: limits.stores === 999999 
-                        ? '5%' // Mostrar una barra mínima para ilimitado
-                        : `${Math.min((state.stores.length / limits.stores) * 100, 100)}%` 
-                    }}
-                  ></div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 admin-dark:text-gray-300">Productos (promedio por tienda)</span>
-                  <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {Math.round(state.stores.reduce((total, store) => total + (store.products?.length || 0), 0) / Math.max(state.stores.length, 1))} / {limits.products === 999999 ? '∞' : limits.products}
-                  </span>
-                </div>
-                {limits.products !== 999999 ? (
-                  <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full"
-                      style={{ 
-                        width: `${Math.min((Math.round(state.stores.reduce((total, store) => total + (store.products?.length || 0), 0) / Math.max(state.stores.length, 1)) / limits.products) * 100, 100)}%` 
-                      }}
-                    ></div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-green-600 admin-dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                    <span>Ilimitados</span>
-                  </div>
-                )}
-              </div>
-              
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-gray-600 admin-dark:text-gray-300">Categorías</span>
-                  <span className="font-medium text-gray-900 admin-dark:text-white">
-                    {limits.categories === 999999 ? '∞' : limits.categories}
-                  </span>
-                </div>
-                {limits.categories !== 999999 ? (
-                  <div className="w-full bg-gray-200 admin-dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
-                      style={{ 
-                        width: `${Math.min((state.currentStore?.categories.length || 0) / limits.categories * 100, 100)}%` 
-                      }}
-                    ></div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-green-600 admin-dark:text-green-400">
-                    <Check className="w-4 h-4" />
-                    <span>Sin límites</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Download Invoice */}
-          <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 admin-dark:border-gray-700 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-4">Facturas</h3>
-            <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
-              Descarga tus facturas para registros contables
-            </p>
-            <button className="flex items-center gap-2 bg-gray-100 admin-dark:bg-gray-700 hover:bg-gray-200 admin-dark:hover:bg-gray-600 text-gray-700 admin-dark:text-gray-300 px-4 py-2 rounded-lg font-medium transition-colors">
-              <Download className="w-4 h-4" />
-              Descargar Última Factura
-            </button>
-          </div>
-
-          {/* Cancel Subscription */}
-          {!isCanceled && (
-            <div className="bg-white admin-dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 admin-dark:border-gray-700 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-4">Cancelar Suscripción</h3>
-              <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
-                Puedes cancelar en cualquier momento. Mantienes acceso hasta el final del período
-              </p>
-              <button 
-                onClick={() => setShowCancelModal(true)}
-                className="flex items-center gap-2 bg-red-50 admin-dark:bg-red-900/20 hover:bg-red-100 admin-dark:hover:bg-red-900/30 text-red-600 admin-dark:text-red-400 px-4 py-2 rounded-lg font-medium transition-colors"
+            {user?.stripeCustomerId ? (
+              <button
+                onClick={handleOpenBillingPortal}
+                disabled={isLoadingPortal}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <X className="w-4 h-4" />
-                Cancelar Suscripción
+                {isLoadingPortal ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Cargando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Gestionar Suscripción
+                  </span>
+                )}
               </button>
-            </div>
-          )}
-        </div>
-
-        {/* Support */}
-        <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 admin-dark:from-blue-900/20 admin-dark:to-indigo-900/20 rounded-xl border border-blue-200 admin-dark:border-blue-800 p-6">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
-              ¿Necesitas ayuda?
-            </h3>
-            <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
-              Como usuario {planName}, tienes acceso a soporte prioritario
-            </p>
-            <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-              Contactar Soporte Prioritario
-            </button>
+            ) : (
+              <div className="text-red-600 text-sm font-medium">
+                No tienes un cliente de Stripe asociado. Si ya te suscribiste y ves este mensaje, contacta soporte.
+              </div>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Cancel Confirmation Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 admin-dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle className="w-8 h-8 text-red-600 admin-dark:text-red-400" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white mb-2">
-                ¿Cancelar suscripción?
-              </h2>
-              <p className="text-gray-600 admin-dark:text-gray-300">
-                Tu suscripción se cancelará al final del período actual. Mantienes acceso hasta el {subscriptionEndDate?.toLocaleDateString('es-ES')}.
-              </p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="bg-yellow-50 admin-dark:bg-yellow-900/20 border border-yellow-200 admin-dark:border-yellow-800 rounded-lg p-3">
-                <h4 className="font-medium text-yellow-800 admin-dark:text-yellow-200 mb-1">Perderás acceso a:</h4>
-                <ul className="text-sm text-yellow-700 admin-dark:text-yellow-300 space-y-1">
-                  <li>• Múltiples tiendas (solo 1 tienda)</li>
-                  <li>• Productos adicionales</li>
-                  <li>• Analíticas avanzadas</li>
-                  <li>• Personalización premium</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                disabled={isCanceling}
-                className="flex-1 px-4 py-3 border border-gray-300 admin-dark:border-gray-600 text-gray-700 admin-dark:text-gray-300 rounded-lg hover:bg-gray-50 admin-dark:hover:bg-gray-700 font-medium transition-colors disabled:opacity-50"
-              >
-                Mantener {planName}
-              </button>
-              <button
-                onClick={handleCancelSubscription}
-                disabled={isCanceling}
-                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isCanceling ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Cancelando...</span>
-                  </>
-                ) : (
-                  'Sí, Cancelar'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upgrade Modal */}
-      {showUpgradeModal && recommendedPlan && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white admin-dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white">Actualizar Plan</h2>
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="p-2 hover:bg-gray-100 admin-dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-100 to-pink-100 admin-dark:from-purple-900/30 admin-dark:to-pink-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-purple-600 admin-dark:text-purple-400" />
-              </div>
-              
-              <h3 className="text-lg font-semibold text-gray-900 admin-dark:text-white mb-2">
-                Actualizar a Plan {recommendedPlan.name}
-              </h3>
-              <p className="text-gray-600 admin-dark:text-gray-300">
-                Obtén hasta {recommendedPlan.maxStores === 999999 ? '∞' : recommendedPlan.maxStores} tiendas y {recommendedPlan.maxProducts === 999999 ? '∞' : recommendedPlan.maxProducts} productos por tienda
-              </p>
-            </div>
-            <div className={`${isDarkMode ? 'bg-gray-900' : 'bg-purple-100'} rounded-lg p-4 mb-6`}>
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
-                  ${recommendedPlan.price.toFixed(2)}/mes
-                </div>
-                {userPlan && (
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                    Diferencia: +${(recommendedPlan.price - userPlan.price).toFixed(2)}/mes
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="flex-1 px-4 py-3 border border-gray-300 admin-dark:border-gray-600 text-gray-700 admin-dark:text-gray-300 rounded-lg hover:bg-gray-50 admin-dark:hover:bg-gray-700 font-medium transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleUpgradeToPro}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-medium transition-colors"
-              >
-                Actualizar Ahora
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Downgrade Warning Modal */}
-      <DowngradeWarningModal
-        isOpen={showDowngradeWarning}
-        onClose={() => setShowDowngradeWarning(false)}
-        onConfirm={processCancellation}
-        currentPlan={user?.plan || 'emprendedor'}
-        newPlan="gratuito"
-        excessStores={state.stores.length - 1}
-      />
-
-      {/* Modal de selección de planes */}
-      {showPlanSelection && <PlanSelectionModal />}
     </div>
   );
 }

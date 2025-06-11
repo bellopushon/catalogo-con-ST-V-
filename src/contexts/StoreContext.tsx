@@ -19,6 +19,7 @@ export interface User {
   subscriptionEndDate?: string;
   subscriptionCanceledAt?: string;
   paymentMethod?: string;
+  stripeCustomerId?: string; // ID del cliente en Stripe
   createdAt?: string;
   updatedAt?: string;
 }
@@ -386,6 +387,7 @@ function transformSupabaseUserToAppUser(supabaseUser: any, userData: any): User 
     subscriptionEndDate: userData?.subscription_end_date || undefined,
     subscriptionCanceledAt: userData?.subscription_canceled_at || undefined,
     paymentMethod: userData?.payment_method || undefined,
+    stripeCustomerId: userData?.stripe_customer_id || undefined,
     createdAt: userData?.created_at || undefined,
     updatedAt: userData?.updated_at || undefined,
   };
