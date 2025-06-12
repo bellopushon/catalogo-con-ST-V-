@@ -4,36 +4,41 @@ import { AlertTriangle } from 'lucide-react';
 
 interface StoreLimitModalProps {
   isOpen: boolean;
+  onClose?: () => void;
 }
 
-export default function StoreLimitModal({ isOpen }: StoreLimitModalProps) {
-  const { state, getMaxStores, suspendStores } = useStore();
+export default function StoreLimitModal({ isOpen, onClose }: StoreLimitModalProps) {
+  const { state, getMaxStores, loadUserStores, suspendStores } = useStore();
   const maxStores = getMaxStores();
   const activeStores = state.stores.filter(store => store.status === 'active');
   const suspendedStores = state.stores.filter(store => store.status === 'suspended');
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    activeStores.slice(-maxStores).map(store => store.id)
-  );
+  const [selectedId, setSelectedId] = useState<string>(activeStores[0]?.id || '');
   const [loading, setLoading] = useState(false);
 
-  if (!isOpen) return null;
+  // Cerrar el modal automáticamente si ya solo hay una tienda activa o el límite permitido
+  React.useEffect(() => {
+    if (activeStores.length <= maxStores && isOpen) {
+      if (onClose) onClose();
+    }
+  }, [activeStores.length, maxStores, isOpen, onClose]);
+
+  // Si no hay más de una tienda activa, no mostrar el modal
+  if (!isOpen || activeStores.length <= 1) return null;
 
   const handleSelect = (storeId: string) => {
-    if (selectedIds.includes(storeId)) {
-      setSelectedIds(selectedIds.filter(id => id !== storeId));
-    } else if (selectedIds.length < maxStores) {
-      setSelectedIds([...selectedIds, storeId]);
-    }
+    setSelectedId(storeId);
   };
 
   const handleConfirm = async () => {
     setLoading(true);
     const toSuspend = activeStores
-      .filter(store => !selectedIds.includes(store.id))
+      .filter(store => store.id !== selectedId)
       .map(store => store.id);
     await suspendStores(toSuspend);
+    if (state.user && state.user.id) {
+      await loadUserStores(state.user.id);
+    }
     setLoading(false);
-    window.location.reload(); // Forzar recarga para evitar inconsistencias
   };
 
   return (
@@ -52,8 +57,9 @@ export default function StoreLimitModal({ isOpen }: StoreLimitModalProps) {
             {activeStores.map(store => (
               <button
                 key={store.id}
+                type="button"
                 className={`border rounded-xl p-4 flex flex-col items-center transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500
-                  ${selectedIds.includes(store.id)
+                  ${selectedId === store.id
                     ? 'border-indigo-600 bg-indigo-50 shadow-md'
                     : 'border-gray-200 bg-white hover:border-indigo-400'}
                 `}
@@ -62,17 +68,24 @@ export default function StoreLimitModal({ isOpen }: StoreLimitModalProps) {
               >
                 <span className="font-semibold text-gray-900 mb-1">{store.name}</span>
                 <span className="text-xs text-gray-500">{store.slug}</span>
-                {selectedIds.includes(store.id) && (
-                  <span className="mt-2 text-xs text-indigo-600 font-medium">Seleccionada</span>
-                )}
+                <span className="mt-2 text-xs text-indigo-600 font-medium">
+                  <input
+                    type="radio"
+                    checked={selectedId === store.id}
+                    onChange={() => handleSelect(store.id)}
+                    className="mr-2 accent-indigo-600"
+                    disabled={loading}
+                  />
+                  {selectedId === store.id ? 'Seleccionada' : 'Seleccionar'}
+                </span>
               </button>
             ))}
           </div>
           <button
             className={`w-full py-3 rounded-lg font-semibold text-white transition-colors text-lg
-              ${selectedIds.length === maxStores && !loading ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'}`}
+              ${selectedId && activeStores.length > 1 && !loading ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'}`}
             onClick={handleConfirm}
-            disabled={selectedIds.length !== maxStores || loading}
+            disabled={!selectedId || activeStores.length <= 1 || loading}
           >
             {loading ? 'Guardando...' : 'Confirmar selección'}
           </button>
@@ -80,4 +93,4 @@ export default function StoreLimitModal({ isOpen }: StoreLimitModalProps) {
       </div>
     </div>
   );
-} 
+}

@@ -340,6 +340,7 @@ const StoreContext = createContext<{
   // NUEVO: Función para suspender tiendas
   suspendStores: (storeIds: string[]) => Promise<void>;
   reactivateStore: (storeId: string) => Promise<void>;
+  loadUserStores: (userId: string) => Promise<void>;
 }>({
   state: initialState,
   dispatch: () => null,
@@ -367,6 +368,7 @@ const StoreContext = createContext<{
   hasStoreLimitExceeded: false,
   suspendStores: async () => {},
   reactivateStore: async () => {},
+  loadUserStores: async () => {},
 });
 
 // Funciones auxiliares de transformación
@@ -1713,7 +1715,8 @@ console.log('🔐 checkAuth - Verificando autenticación...'); // AGREGA ESTA L�
       getMaxCategories,
       hasStoreLimitExceeded,
       suspendStores,
-      reactivateStore
+      reactivateStore,
+      loadUserStores
     }}>
       {children}
     </StoreContext.Provider>

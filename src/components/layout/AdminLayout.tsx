@@ -12,10 +12,16 @@ interface AdminLayoutProps {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const { hasStoreLimitExceeded } = useStore();
+  const [showStoreLimitModal, setShowStoreLimitModal] = React.useState(false);
+
+  React.useEffect(() => {
+    setShowStoreLimitModal(hasStoreLimitExceeded);
+  }, [hasStoreLimitExceeded]);
+
   return (
     <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900 admin-panel">
       {/* Modal bloqueante para límite de tiendas */}
-      <StoreLimitModal isOpen={hasStoreLimitExceeded} />
+      <StoreLimitModal isOpen={showStoreLimitModal} onClose={() => setShowStoreLimitModal(false)} />
       {/* Desktop Layout */}
       <div className="hidden lg:flex">
         <Sidebar />

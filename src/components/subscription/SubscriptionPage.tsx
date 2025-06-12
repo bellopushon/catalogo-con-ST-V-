@@ -310,7 +310,32 @@ export default function SubscriptionPage() {
         </div>
       );
     }
-    
+
+    // Validar que el plan tenga stripe_price_id
+    if (!selectedPlanObj.stripe_price_id) {
+      return (
+        <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 admin-dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600 admin-dark:text-red-400" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 admin-dark:text-white mb-2">
+              Plan no vinculado a Stripe
+            </h2>
+            <p className="text-gray-600 admin-dark:text-gray-300 mb-4">
+              Este plan no está vinculado correctamente con Stripe. Contacta al administrador.
+            </p>
+            <button
+              onClick={() => setShowPayment(false)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              Volver a Planes
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // Usar el nuevo componente PaymentForm para Stripe
     return (
       <div className="min-h-screen bg-gray-50 admin-dark:bg-gray-900">

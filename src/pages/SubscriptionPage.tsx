@@ -5,8 +5,11 @@ import { User } from '../types';
 import { Invoice } from '../constants/stripe';
 import { Spinner } from '../components/ui/Spinner';
 import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { formatDate } from '../utils/date';
+import { getPlans, getCurrentSubscription, redirectToCheckout } from '../lib/stripe';
+import type { Plan, Subscription } from '../types/stripe';
+import { toast } from 'sonner';
 
 export const SubscriptionPage: React.FC = () => {
   const { user, loading } = useAuth();
@@ -17,6 +20,8 @@ export const SubscriptionPage: React.FC = () => {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -74,6 +79,24 @@ export const SubscriptionPage: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [plansData, subscriptionData] = await Promise.all([
+          getPlans(),
+          getCurrentSubscription()
+        ]);
+        setPlans(plansData);
+        setCurrentSubscription(subscriptionData);
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+        toast.error('Error al cargar los planes');
+      }
+    };
+
+    loadData();
+  }, []);
+
   const handleOpenBillingPortal = async () => {
     try {
       const response = await fetch('/api/stripe-billing-portal', {
@@ -91,6 +114,15 @@ export const SubscriptionPage: React.FC = () => {
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
+    }
+  };
+
+  const handleSubscribe = async (planId: string) => {
+    try {
+      await redirectToCheckout(planId);
+    } catch (error) {
+      console.error('Error al suscribirse:', error);
+      toast.error('Error al procesar la suscripción');
     }
   };
 
@@ -208,6 +240,64 @@ export const SubscriptionPage: React.FC = () => {
             </p>
           )}
         </div>
+      </Card>
+
+      <Card className="mt-8">
+        <CardHeader>
+          <CardTitle>Planes de Suscripción</CardTitle>
+          <CardDescription>Selecciona un plan para suscribirte</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {plans.map((plan) => (
+              <Card key={plan.id} className="flex flex-col">
+                <CardHeader>
+                  <CardTitle>{plan.name}</CardTitle>
+                  <CardDescription>{plan.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold">
+                      ${plan.price}
+                    </span>
+                    <span className="text-muted-foreground">/{plan.interval}</span>
+                  </div>
+                  
+                  <ul className="space-y-2 mb-6">
+                    {Object.entries(plan.features).map(([key, value]) => (
+                      <li key={key} className="flex items-center">
+                        <svg
+                          className="h-4 w-4 text-primary mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        {value}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button
+                    className="w-full"
+                    onClick={() => handleSubscribe(plan.id)}
+                    disabled={currentSubscription?.plan_id === plan.id}
+                  >
+                    {currentSubscription?.plan_id === plan.id
+                      ? 'Plan Actual'
+                      : 'Suscribirse'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

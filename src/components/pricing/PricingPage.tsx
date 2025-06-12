@@ -26,6 +26,7 @@ interface Plan {
   isActive: boolean;
   isFree: boolean;
   level: number;
+  stripe_price_id?: string;
 }
 
 export default function PricingPage() {
@@ -63,7 +64,8 @@ export default function PricingPage() {
             features: plan.features || [],
             isActive: plan.is_active,
             isFree: plan.is_free,
-            level: plan.level
+            level: plan.level,
+            stripe_price_id: plan.stripe_price_id,
           }));
           
           setPlans(formattedPlans);
@@ -121,6 +123,51 @@ export default function PricingPage() {
       description: 'Soporte técnico prioritario con respuesta rápida'
     },
   ];
+
+  // Nueva función para suscribirse
+  const handleSubscribe = async (plan: Plan) => {
+    if (!isLoggedIn) {
+      window.location.href = '/login';
+      return;
+    }
+
+    // Validar que el plan tenga stripe_price_id
+    if (!plan.stripe_price_id) {
+      alert('Este plan no está vinculado correctamente con Stripe. Contacta al administrador.');
+      return;
+    }
+
+    // Obtener la sesión y el usuario autenticado
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    const accessToken = session?.access_token;
+    if (!user || !accessToken) {
+      alert('Debes iniciar sesión.');
+      return;
+    }
+
+    // Llamar a la función de Supabase para crear la sesión de pago
+    const response = await fetch('https://<TU_SUPABASE_PROJECT>.functions.supabase.co/stripe-create-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        planId: plan.id,
+        userId: user.id,
+        successUrl: window.location.origin + '/subscription/success',
+        cancelUrl: window.location.origin + '/subscription/cancel',
+      }),
+    });
+
+    const data = await response.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert('Error al crear la sesión de pago.');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -274,20 +321,25 @@ export default function PricingPage() {
                     </div>
 
                     {/* Action Button */}
-                    <Link
-                      to={isLoggedIn ? "/subscription" : "/login?register=true"}
-                      className={`w-full py-3 px-6 rounded-lg font-medium transition-all text-center block ${
-                        isPlanPopular
-                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white transform hover:scale-105'
-                          : plan.isFree
-                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    {!plan.isFree ? (
+                      <button
+                        className={`w-full py-3 px-6 rounded-lg font-medium transition-all text-center block ${
+                          isPlanPopular
+                            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white transform hover:scale-105'
                             : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                      }`}
-                    >
-                      {plan.isFree
-                        ? isLoggedIn ? 'Ir al Dashboard' : 'Comenzar Gratis'
-                        : isLoggedIn ? `Actualizar a ${plan.name}` : 'Registrarse'}
-                    </Link>
+                        }`}
+                        onClick={() => handleSubscribe(plan)}
+                      >
+                        {isLoggedIn ? `Suscribirse a ${plan.name}` : 'Registrarse'}
+                      </button>
+                    ) : (
+                      <Link
+                        to={isLoggedIn ? "/admin" : "/login?register=true"}
+                        className="w-full py-3 px-6 rounded-lg font-medium transition-all text-center block bg-gray-100 hover:bg-gray-200 text-gray-700"
+                      >
+                        {isLoggedIn ? 'Ir al Dashboard' : 'Comenzar Gratis'}
+                      </Link>
+                    )}
                   </div>
                 </div>
               );
@@ -466,23 +518,11 @@ export default function PricingPage() {
 }
 
 // ShoppingBag icon component
-function ShoppingBag(props) {
+function ShoppingBag(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      {...props}
-    >
-      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-      <path d="M3 6h18"></path>
-      <path d="M16 10a4 4 0 0 1-8 0"></path>
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path d="M6 7V6a6 6 0 1 1 12 0v1" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 7h18l-1.68 12.06A2 2 0 0 1 17.33 21H6.67a2 2 0 0 1-1.99-1.94L3 7Z" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }

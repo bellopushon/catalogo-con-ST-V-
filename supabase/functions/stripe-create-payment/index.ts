@@ -122,17 +122,7 @@ serve(async (req) => {
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Plan ${plan.name}`,
-              description: plan.description,
-            },
-            unit_amount: Math.round(plan.price * 100), // Convert to cents
-            recurring: {
-              interval: "month",
-            },
-          },
+          price: plan.stripe_price_id,
           quantity: 1,
         },
       ],
