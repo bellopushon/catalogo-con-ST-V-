@@ -1,73 +1,73 @@
 import Stripe from 'https://esm.sh/stripe@13.10.0';
+import { createClient } from '@supabase/supabase-js';
 
+// Inicializar Stripe
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2023-10-16',
 });
 
+// Inicializar Supabase
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+);
+
+// Función para manejar errores
+const handleError = (error: any, context: string) => {
+  console.error(`Error en ${context}:`, error);
+  return new Response(
+    JSON.stringify({ 
+      error: `Error en ${context}`,
+      message: error.message 
+    }),
+    { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+};
+
+// Función para validar el usuario
+const validateUser = async (userId: string) => {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error || !user) {
+    throw new Error('Usuario no encontrado');
+  }
+
+  if (!user.stripe_customer_id) {
+    throw new Error('Usuario no tiene una suscripción activa');
+  }
+
+  return user;
+};
+
 Deno.serve(async (req: Request) => {
   try {
-    // Verificar método HTTP
-    if (req.method !== 'POST') {
-      return new Response(
-        JSON.stringify({ error: 'Método no permitido' }),
-        { status: 405, headers: { 'Content-Type': 'application/json' } }
-      );
+    const { userId } = await req.json();
+
+    if (!userId) {
+      throw new Error('Falta el ID del usuario');
     }
 
-    // Verificar token de autenticación
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'No autorizado' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Obtener y validar datos del cuerpo
-    const { customerId, returnUrl } = await req.json();
-    
-    if (!customerId) {
-      return new Response(
-        JSON.stringify({ error: 'Se requiere el ID del cliente' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    // Validar usuario
+    const user = await validateUser(userId);
 
     // Crear sesión del portal
     const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: returnUrl || 'http://localhost:3000/subscription',
+      customer: user.stripe_customer_id,
+      return_url: `${req.headers.get('origin')}/account`,
     });
 
     return new Response(
       JSON.stringify({ url: session.url }),
-      { 
-        status: 200,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }
-      }
+      { headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error: any) {
-    console.error('Error en create-portal-session:', error);
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Error al crear la sesión del portal',
-        message: error.message 
-      }),
-      { 
-        status: 500,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }
-      }
-    );
+  } catch (error) {
+    return handleError(error, 'creación de sesión del portal');
   }
 }); 

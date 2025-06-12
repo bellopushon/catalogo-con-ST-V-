@@ -10,6 +10,62 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Inicializar Stripe
+const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+  apiVersion: '2023-10-16',
+});
+
+// Inicializar Supabase
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+);
+
+// Función para manejar errores
+const handleError = (error: any, context: string) => {
+  console.error(`Error en ${context}:`, error);
+  return new Response(
+    JSON.stringify({ 
+      error: `Error en ${context}`,
+      message: error.message 
+    }),
+    { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+};
+
+// Función para validar el plan
+const validatePlan = async (planId: string) => {
+  const { data: plan, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('id', planId)
+    .single();
+
+  if (error || !plan) {
+    throw new Error('Plan no válido');
+  }
+
+  return plan;
+};
+
+// Función para validar el usuario
+const validateUser = async (userId: string) => {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error || !user) {
+    throw new Error('Usuario no encontrado');
+  }
+
+  return user;
+};
+
 serve(async (req) => {
   // Handle CORS preflight request
   if (req.method === "OPTIONS") {
@@ -66,44 +122,21 @@ serve(async (req) => {
       });
     }
 
-    // Get plan details from database
-    const { data: plan, error: planError } = await supabase
-      .from("plans")
-      .select("*")
-      .eq("id", planId)
-      .single();
-
-    if (planError || !plan) {
-      return new Response(JSON.stringify({ error: "Plan not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Validar plan y usuario
+    const [plan, userData] = await Promise.all([
+      validatePlan(planId),
+      validateUser(userId)
+    ]);
 
     // Get or create Stripe customer
-    let customerId;
-    const { data: customerData } = await supabase
-      .from("users")
-      .select("stripe_customer_id")
-      .eq("id", user.id)
-      .single();
-
-    if (customerData?.stripe_customer_id) {
-      customerId = customerData.stripe_customer_id;
-    } else {
-      // Get user details
-      const { data: userData } = await supabase
-        .from("users")
-        .select("name, email")
-        .eq("id", user.id)
-        .single();
-
+    let customerId = userData.stripe_customer_id;
+    if (!customerId) {
       // Create new customer in Stripe
       const customer = await stripe.customers.create({
         email: userData.email,
         name: userData.name,
         metadata: {
-          user_id: user.id
+          userId: userData.id
         }
       });
 
@@ -113,7 +146,7 @@ serve(async (req) => {
       await supabase
         .from("users")
         .update({ stripe_customer_id: customerId })
-        .eq("id", user.id);
+        .eq("id", userId);
     }
 
     // Create Stripe Checkout session
@@ -130,8 +163,8 @@ serve(async (req) => {
       success_url: `${successUrl}?plan=${planId}`,
       cancel_url: cancelUrl,
       metadata: {
-        user_id: user.id,
-        plan_id: planId
+        userId,
+        planId
       },
     });
 
@@ -140,10 +173,6 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error creating payment session:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return handleError(error, 'creación de pago');
   }
 });
